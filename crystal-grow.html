@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crystal Grow</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:"Helvetica Neue",Arial,sans-serif;color:#111;cursor:none;user-select:none}
+canvas{display:block}
+#title{position:fixed;top:34px;left:40px;pointer-events:none}
+#title .lab{font-variant:small-caps;letter-spacing:.18em;font-size:13px;text-transform:lowercase;color:#555}
+#title h1{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:400;font-size:64px;line-height:.95;margin:10px 0 12px}
+#title h1 span{color:#1f78e6}
+#title p{margin:0;font-size:14px;color:#666}
+#panel{position:fixed;right:32px;top:50%;transform:translateY(-50%);width:220px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid #eee;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:20px;font-size:12px}
+#panel h4{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#888;font-weight:500}
+.sw{display:flex;gap:9px;margin-bottom:20px;flex-wrap:wrap}
+.sw button{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:none;padding:0}
+.sw button.on{box-shadow:0 0 0 2px #111}
+.seg{display:flex;gap:6px;margin-bottom:18px}.seg button{flex:1;border:1px solid #ddd;background:#fff;border-radius:999px;padding:6px 0;font-size:11px;cursor:none}.seg button.on{background:#111;color:#fff;border-color:#111}
+input[type=range]{width:100%;accent-color:#111;margin:0 0 18px;cursor:none}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #eee;padding:9px 0}
+.row b{font-family:Georgia,serif;font-style:italic;font-size:22px;font-weight:400}
+.act{width:100%;margin-top:12px;background:#111;color:#fff;border:0;border-radius:999px;padding:12px;font-size:13px;letter-spacing:.04em;cursor:none}
+.act:hover{background:#333}
+#hint{position:fixed;left:40px;bottom:30px;font-size:12px;letter-spacing:.08em;color:#777;pointer-events:none}
+#cur{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1.5px solid #111;background:rgba(17,17,17,.06);pointer-events:none;transition:width .15s,height .15s,margin .15s,background .15s;z-index:9}
+#cur.hold{width:12px;height:12px;margin:-6px 0 0 -6px;background:#111}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.170.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.170.0/examples/jsm/"}}</script>
+</head><body>
+<div id="title"><div class="lab">Nº 21 / Grown Goods</div><h1>Crystal /<br><span>Grow.</span></h1><p>Seed a supersaturated solution and let the lattice decide the shape.</p></div>
+<div id="panel"><h4>Substance · <span id="subn" style="letter-spacing:0;text-transform:none;color:#111">Salt · NaCl</span></h4><div class="sw" id="sw"></div>
+<h4>Cooling</h4><input id="cool" type="range" min="0.05" max="1" step="0.01" value="0.5">
+<div class="row"><span>Crystals</span><b id="cc">0</b></div>
+<div class="row"><span>Supersaturation</span><b id="st">160%</b></div>
+<div class="row"><span>Solution</span><b id="tp">32 °C</b></div>
+<button class="act" id="dis">Dissolve all</button></div>
+<div id="hint">Click the solution to seed · Faster cooling, faster growth · Pick a substance to change the habit</div>
+<div id="cur"></div>
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+const cur=document.getElementById('cur');
+addEventListener('pointermove',e=>{cur.style.transform=`translate(${e.clientX}px,${e.clientY}px)`;});
+function swatches(id,cols,cb){const el=document.getElementById(id);cols.forEach((c,i)=>{const b=document.createElement('button');b.style.background=c;if(!i)b.className='on';b.onclick=()=>{[...el.children].forEach((x,j)=>x.className=j===i?'on':'');cb(i);};el.appendChild(b);});}
+
+
+// habits: NaCl cubic (cubes), potassium alum cubic (octahedra), CuSO4·5H2O triclinic (skewed prisms), ice Ih hexagonal (6-fold dendrites)
+const SUB=[{n:'Salt · NaCl',c:'#f4f7fa',liq:'#eef4f8',ior:1.54,habit:'cube'},{n:'Alum · KAl(SO₄)₂·12H₂O',c:'#f1f4ff',liq:'#f0f2f8',ior:1.46,habit:'oct'},
+  {n:'Copper sulfate · CuSO₄·5H₂O',c:'#1f78e6',liq:'#3d9bff',ior:1.53,habit:'tri'},{n:'Ice · H₂O',c:'#e6f6ff',liq:'#dceff8',ior:1.31,habit:'ice'}];
+let sub=0, cooling=0.5, sat=1;
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5)); renderer.setSize(innerWidth,innerHeight);
+renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.05;
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const vg=document.createElement('div');vg.style.cssText='position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 45% 50%,rgba(0,0,0,0) 55%,rgba(20,24,32,.06) 100%);z-index:1';document.body.appendChild(vg);
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#fff');
+scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),0.02).texture;
+const camera=new THREE.PerspectiveCamera(32,innerWidth/innerHeight,1,60);
+scene.add(new THREE.HemisphereLight(0xffffff,0xe9edf2,0.5));
+const sun=new THREE.DirectionalLight(0xffffff,1.4); sun.position.set(-4,10,5); sun.castShadow=true; sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-4.5,right:4.5,top:4.5,bottom:-4.5,near:4,far:20}); sun.shadow.radius=5; sun.shadow.bias=-0.0003; sun.shadow.normalBias=0.03; scene.add(sun);
+const rim=new THREE.DirectionalLight(0xdfe9ff,0.6); rim.position.set(6,4,-6); scene.add(rim);
+const DR=3.4, DH=0.9, LV=0.6, BASE=0.12;
+// soft contact shadow (texture, no shadow map)
+const sc=document.createElement('canvas');sc.width=sc.height=256;const sx=sc.getContext('2d');const sg=sx.createRadialGradient(128,128,60,128,128,128);
+sg.addColorStop(0,'rgba(20,25,35,.35)');sg.addColorStop(1,'rgba(20,25,35,0)');sx.fillStyle=sg;sx.fillRect(0,0,256,256);
+const contact=new THREE.Mesh(new THREE.PlaneGeometry(DR*3.2,DR*3.2).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sc),transparent:true,depthWrite:false}));
+contact.position.y=0.002; contact.renderOrder=-1; scene.add(contact);
+// dark velvet display base with rounded edge (opaque, only shadow receiver)
+const bpz=[new THREE.Vector2(0,0.02)];for(let i=0;i<=8;i++){const t=i/8*Math.PI/2;bpz.push(new THREE.Vector2(DR+0.7+Math.sin(t)*0.1,0.02+(1-Math.cos(t))*0.1));}bpz.push(new THREE.Vector2(DR+0.6,BASE),new THREE.Vector2(0,BASE));
+const base=new THREE.Mesh(new THREE.LatheGeometry(bpz.reverse(),128),new THREE.MeshPhysicalMaterial({color:'#1d2330',roughness:0.75,sheen:0.6,sheenColor:new THREE.Color('#5a6680')}));
+base.receiveShadow=true; scene.add(base);
+const Y0=BASE+0.004; // dish sits slightly above base: no coplanar faces
+// glass dish: back and front faces as separate meshes with fixed render order (no sort popping)
+const dp=[new THREE.Vector2(0,0),new THREE.Vector2(DR-0.05,0),new THREE.Vector2(DR,0.05),new THREE.Vector2(DR+0.02,DH),new THREE.Vector2(DR-0.05,DH+0.02),new THREE.Vector2(DR-0.08,0.1),new THREE.Vector2(0,0.07)];
+const dishGeo=new THREE.LatheGeometry(dp,128);
+const glassP={color:'#ffffff',roughness:0.02,metalness:0,clearcoat:1,clearcoatRoughness:0.02,transparent:true,depthWrite:false,envMapIntensity:1.4,specularIntensity:1};
+const dishBack=new THREE.Mesh(dishGeo,new THREE.MeshPhysicalMaterial({...glassP,opacity:0.12,side:THREE.BackSide})); dishBack.position.y=Y0; dishBack.renderOrder=1; scene.add(dishBack);
+const dishFront=new THREE.Mesh(dishGeo,new THREE.MeshPhysicalMaterial({...glassP,opacity:0.2,side:THREE.FrontSide})); dishFront.position.y=Y0; dishFront.renderOrder=4; scene.add(dishFront);
+// liquid with meniscus (lathe), slightly inset from glass
+const lp=[new THREE.Vector2(0,LV)];for(let i=0;i<=10;i++){const t=i/10;const r=(DR-0.14)*(0.85+0.15*t);lp.push(new THREE.Vector2(r,LV+0.06*Math.pow(t,4)));}lp.push(new THREE.Vector2(DR-0.13,0.1));
+const liqMat=new THREE.MeshPhysicalMaterial({color:SUB[0].liq,roughness:0.03,clearcoat:1,transparent:true,opacity:0.12,depthWrite:false,envMapIntensity:1.2,side:THREE.FrontSide});
+const liquid=new THREE.Mesh(new THREE.LatheGeometry(lp.reverse(),128),liqMat); liquid.position.y=Y0; liquid.renderOrder=2; scene.add(liquid);
+// geometries
+const cubeG=new THREE.BoxGeometry(1,1,1), octG=new THREE.OctahedronGeometry(0.7);
+const triG=(()=>{const g=new THREE.BoxGeometry(0.55,1.0,0.32);const m=new THREE.Matrix4().set(1,0.32,0.12,0, 0,1,0,0, 0.18,0.1,1,0, 0,0,0,1);g.applyMatrix4(m);return g;})();
+const armG=new THREE.BoxGeometry(1,0.03,0.07).translate(0.5,0,0), plateG=new THREE.CylinderGeometry(0.16,0.16,0.035,6);
+const MATS={};function mat(){const s=SUB[sub];if(MATS[sub])return MATS[sub];return MATS[sub]=new THREE.MeshPhysicalMaterial({color:s.habit==='tri'?'#2f86ff':'#ffffff',roughness:0.015,metalness:0,transmission:1,thickness:0.9,ior:s.ior,
+  dispersion:s.habit==='ice'?0:s.habit==='cube'?0.6:0.35,flatShading:true,clearcoat:1,clearcoatRoughness:0.01,attenuationColor:new THREE.Color(s.habit==='tri'?'#0047c2':s.habit==='ice'?'#d8f0ff':'#f2f6ff'),
+  attenuationDistance:s.habit==='tri'?0.3:2.5,specularIntensity:1,envMapIntensity:2.0});}
+const crystals=[]; let capacity=1;
+function vol(c){return c.parts.reduce((s,p)=>s+p.s**3,0);}
+function seed(x,z,parent){
+  const s=SUB[sub],g=new THREE.Group();g.position.set(x,Y0+(s.habit==='ice'?LV+0.02:0.075),z);scene.add(g);const m=mat();
+  const c={g,m,habit:s.habit,parts:[],t:0,arms:[],dissolve:false};
+  if(s.habit==='ice'){g.rotation.y=Math.random()*Math.PI;const pl=new THREE.Mesh(plateG,m);pl.scale.setScalar(0.001);g.add(pl);c.plate=pl;
+    for(let k=0;k<6;k++){const a=k*Math.PI/3;const arm={len:0,a,mesh:new THREE.Mesh(armG,m),side:[]};arm.mesh.rotation.y=a;arm.mesh.scale.set(0.001,1,1);g.add(arm.mesh);c.arms.push(arm);} }
+  else{const n=1+Math.floor(Math.random()*(s.habit==='cube'?3:2));
+    const base=new THREE.Euler(s.habit==='oct'?0.62:Math.random()*0.3,Math.random()*Math.PI,s.habit==='tri'?(Math.random()-.5)*0.8:Math.random()*0.2);
+    for(let i=0;i<n;i++){const geo=s.habit==='cube'?cubeG:s.habit==='oct'?octG:triG;const pm=new THREE.Mesh(geo,m);pm.castShadow=true;pm.receiveShadow=false;
+      pm.rotation.copy(base);if(s.habit!=='cube'&&i>0)pm.rotation.set(base.x+(Math.random()-.5)*0.9,base.y+(Math.random()-.5)*1.2,base.z+(Math.random()-.5)*0.9);
+      const off=i?new THREE.Vector3((Math.random()-.5)*0.6,0,(Math.random()-.5)*0.6):new THREE.Vector3();pm.position.copy(off);g.add(pm);
+      pm.scale.setScalar(0.001);c.parts.push({mesh:pm,s:0.001,max:(0.5+Math.random()*0.5)*(i?0.7:1),rate:(0.7+Math.random()*0.6)*(i?0.8:1),off});}}
+  crystals.push(c);return c;}
+function grow(c,dt){const k=cooling*sat*dt;
+  if(c.habit==='ice'){c.t+=k*1.4*Math.max(0,1-c.t/1.6);const L=Math.min(1.4,c.t);c.plate.scale.setScalar(Math.max(0.001,Math.min(1,c.t*2.5)));
+    for(const a of c.arms){a.len=L;a.mesh.scale.set(L,1,1);
+      const want=Math.floor(L/0.18);while(a.side.length<want*2&&a.side.length<14){const i=Math.floor(a.side.length/2),sgn=a.side.length%2?1:-1,at=0.18*(i+1);
+        const sm=new THREE.Mesh(armG,c.m);sm.position.set(Math.cos(a.a)*at,0,-Math.sin(a.a)*at);sm.rotation.y=a.a+sgn*Math.PI/3;sm.scale.set(0.001,0.8,0.7);c.g.add(sm);a.side.push({m:sm,at});}
+      for(const s of a.side){const l=Math.max(0.001,Math.min((L-s.at)*0.55,0.45*(1-s.at/1.6)));s.m.scale.x=l;}}
+    return;}
+  for(const p of c.parts){p.s+=k*0.5*p.rate*Math.max(0,1-p.s/p.max)*(0.25+p.s/p.max);p.mesh.scale.setScalar(p.s);
+    p.mesh.position.set(p.off.x,c.habit==='oct'?p.s*0.55:c.habit==='cube'?p.s*0.45:p.s*0.4,p.off.z);}}
+// input
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2();
+addEventListener('pointermove',e=>mouse.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1));
+renderer.domElement.addEventListener('pointerdown',e=>{mouse.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(mouse,camera);const p=new THREE.Vector3();
+  if(!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-(Y0+LV)),p))return;if(Math.hypot(p.x,p.z)>DR-0.7||crystals.length>=40||sat<0.05)return;
+  seed(p.x,p.z);cur.classList.add('hold');setTimeout(()=>cur.classList.remove('hold'),180);});
+function dissolveAll(){for(const c of crystals)c.dissolve=true;}
+swatches('sw',SUB.map(s=>s.c==='#f4f7fa'?'#dde4ea':s.c==='#f1f4ff'?'#c9cff0':s.c),i=>{sub=i;dissolveAll();liqMat.color.set(SUB[i].liq);liqMat.opacity=SUB[i].habit==="tri"?0.2:0.12;document.getElementById('subn').textContent=SUB[i].n;});
+document.getElementById('cool').oninput=e=>cooling=+e.target.value;
+document.getElementById('dis').onclick=dissolveAll;
+const ccEl=document.getElementById('cc'),stEl=document.getElementById('st'),tEl=document.getElementById('tp');
+const clock=new THREE.Clock(); let T=0, frame=0;
+function loop(){
+  const dt=Math.min(clock.getDelta(),1/30); T+=dt;
+  let used=0;
+  for(const c of [...crystals]){
+    if(c.dissolve){c.g.scale.multiplyScalar(Math.exp(-3*dt));if(c.g.scale.x<0.03){scene.remove(c.g);crystals.splice(crystals.indexOf(c),1);}continue;}
+    grow(c,dt); used+=c.habit==='ice'?c.t*0.12:vol(c);
+  }
+  sat=Math.max(0,1-used/1.6);
+  // occasional secondary nucleation near existing crystals
+  if(crystals.length&&crystals.length<40&&Math.random()<dt*cooling*sat*0.25){const c=crystals[Math.floor(Math.random()*crystals.length)];if(!c.dissolve&&SUB[sub].habit===c.habit){const a=Math.random()*6.28,r=0.7+Math.random()*0.8;
+    const x=c.g.position.x+Math.cos(a)*r,z=c.g.position.z+Math.sin(a)*r;if(Math.hypot(x,z)<DR-0.7&&!crystals.some(o=>Math.hypot(o.g.position.x-x,o.g.position.z-z)<0.6))seed(x,z);}}
+  if(frame++%10===0){ccEl.textContent=crystals.filter(c=>!c.dissolve).length;stEl.textContent=Math.round(100+sat*60)+'%';tEl.textContent=(SUB[sub].habit==='ice'?(-1-cooling*6).toFixed(0):(45-cooling*25).toFixed(0))+' °C';}
+  const a=Math.sin(T*0.045)*0.18;
+  camera.position.set(Math.sin(a)*12.5,7.6+Math.sin(T*0.06)*0.15,Math.cos(a)*12.5); camera.lookAt(1.9,0.2,0);
+  renderer.render(scene,camera); requestAnimationFrame(loop);
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+seed(-1.2,0.6);seed(1.0,-0.8);
+window.__t={crystals,camera,get sat(){return sat}};
+loop();
+
+</script></body></html>

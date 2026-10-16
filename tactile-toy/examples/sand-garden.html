@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sand Garden</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:"Helvetica Neue",Arial,sans-serif;color:#111;cursor:none;user-select:none}
+canvas{display:block}
+#title{position:fixed;top:34px;left:40px;pointer-events:none}
+#title .lab{font-variant:small-caps;letter-spacing:.18em;font-size:13px;text-transform:lowercase;color:#555}
+#title h1{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:400;font-size:64px;line-height:.95;margin:10px 0 12px}
+#title h1 span{color:#b8925a}
+#title p{margin:0;font-size:14px;color:#666}
+#panel{position:fixed;right:32px;top:50%;transform:translateY(-50%);width:220px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid #eee;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:20px;font-size:12px}
+#panel h4{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#888;font-weight:500}
+.sw{display:flex;gap:9px;margin-bottom:20px;flex-wrap:wrap}
+.sw button{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:none;padding:0}
+.sw button.on{box-shadow:0 0 0 2px #111}
+.seg{display:flex;gap:6px;margin-bottom:18px}.seg button{flex:1;border:1px solid #ddd;background:#fff;border-radius:999px;padding:6px 0;font-size:11px;cursor:none}.seg button.on{background:#111;color:#fff;border-color:#111}
+input[type=range]{width:100%;accent-color:#111;margin:0 0 18px;cursor:none}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #eee;padding:9px 0}
+.row b{font-family:Georgia,serif;font-style:italic;font-size:22px;font-weight:400}
+.act{width:100%;margin-top:12px;background:#111;color:#fff;border:0;border-radius:999px;padding:12px;font-size:13px;letter-spacing:.04em;cursor:none}
+.act:hover{background:#333}
+#hint{position:fixed;left:40px;bottom:30px;font-size:12px;letter-spacing:.08em;color:#777;pointer-events:none}
+#cur{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1.5px solid #111;background:rgba(17,17,17,.06);pointer-events:none;transition:width .15s,height .15s,margin .15s,background .15s;z-index:9}
+#cur.hold{width:12px;height:12px;margin:-6px 0 0 -6px;background:#111}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<div id="title"><div class="lab">Nº 15 / Quiet Goods</div><h1>Sand /<br><span>Garden.</span></h1><p>A small tray of raked sand and smooth stones. Take your time.</p></div>
+<div id="panel"><h4>Sand</h4><div class="sw" id="sw"></div>
+<h4>Rake width</h4><input id="rw" type="range" min="2" max="9" step="1" value="5">
+<div class="row"><span>Strokes</span><b id="sk">0</b></div>
+<div class="row"><span>Stones</span><b id="st">3</b></div>
+<button class="act" id="smooth">Rake it smooth</button></div>
+<div id="hint">Drag to rake · Double-click to set a stone · Drag a stone to move it</div>
+<div id="cur"></div>
+<script type="module">
+import * as THREE from 'three';
+const cur=document.getElementById('cur');
+addEventListener('pointermove',e=>{cur.style.transform=`translate(${e.clientX}px,${e.clientY}px)`;});
+function swatches(id,cols,cb){const el=document.getElementById(id);cols.forEach((c,i)=>{const b=document.createElement('button');b.style.background=c;if(!i)b.className='on';b.onclick=()=>{[...el.children].forEach((x,j)=>x.className=j===i?'on':'');cb(i);};el.appendChild(b);});}
+
+
+const SAND=['#e9dcc3','#d8c39d','#cfc6ba','#f1ebe0','#c8ab86'];
+let tines=5, strokes=0;
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5)); renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#fff');
+const camera=new THREE.PerspectiveCamera(34,innerWidth/innerHeight,0.1,100);
+scene.add(new THREE.HemisphereLight(0xffffff,0xd9d2c5,1.0));
+const sun=new THREE.DirectionalLight(0xfff3e2,2.0); sun.position.set(-8,6,3); sun.castShadow=true; sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-8,right:8,top:8,bottom:-8,near:1,far:30}); sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.02; sun.shadow.radius=4; scene.add(sun);
+const flr=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.ShadowMaterial({opacity:0.1})); flr.rotation.x=-Math.PI/2; flr.position.y=-0.6; flr.receiveShadow=true; scene.add(flr);
+// grain texture
+const gc=document.createElement('canvas');gc.width=gc.height=256;const gx=gc.getContext('2d');const id=gx.createImageData(256,256);
+for(let i=0;i<256*256;i++){const v=200+Math.random()*55;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}gx.putImageData(id,0,0);
+const grain=new THREE.CanvasTexture(gc); grain.wrapS=grain.wrapT=THREE.RepeatWrapping; grain.repeat.set(10,7);
+// tray
+const W=11, D=7.5, NX=220, NZ=150, dx=W/NX, dz=D/NZ, A=0.055, SP=0.22;
+const geo=new THREE.PlaneGeometry(W,D,NX,NZ).rotateX(-Math.PI/2); const pos=geo.attributes.position, NV=pos.count;
+const h=new Float32Array(NV), tgt=new Float32Array(NV), PX=new Float32Array(NV), PZ=new Float32Array(NV);
+for(let i=0;i<NV;i++){PX[i]=pos.getX(i);PZ[i]=pos.getZ(i);}
+const sandMat=new THREE.MeshStandardMaterial({color:SAND[0],roughness:1,map:grain,bumpMap:grain,bumpScale:0.6});
+const sand=new THREE.Mesh(geo,sandMat); sand.receiveShadow=true; scene.add(sand);
+const under=new THREE.Mesh(new THREE.BoxGeometry(W,0.5,D),sandMat); under.position.y=-0.32; scene.add(under);
+const woodM=new THREE.MeshStandardMaterial({color:'#6b5443',roughness:0.6});
+[[W+0.5,0.3,0,-D/2-0.12,W+0.5,0.24],[W+0.5,0.3,0,D/2+0.12,W+0.5,0.24]].forEach(()=>{});
+for(const [w,d,x,z] of [[W+0.48,0.24,0,-D/2-0.12],[W+0.48,0.24,0,D/2+0.12],[0.24,D,-W/2-0.12,0],[0.24,D,W/2+0.12,0]]){
+  const b=new THREE.Mesh(new THREE.BoxGeometry(w,0.9,d),woodM);b.position.set(x,-0.15,z);b.castShadow=b.receiveShadow=true;scene.add(b);}
+let dirty=true;
+function writeGeo(){for(let i=0;i<NV;i++)pos.setY(i,h[i]);pos.needsUpdate=true;geo.computeVertexNormals();}
+const idx=(c,r)=>r*(NX+1)+c;
+function region(x0,x1,z0,z1,fn){const c0=Math.max(0,Math.floor((x0+W/2)/dx)),c1=Math.min(NX,Math.ceil((x1+W/2)/dx)),r0=Math.max(0,Math.floor((z0+D/2)/dz)),r1=Math.min(NZ,Math.ceil((z1+D/2)/dz));
+  for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){const i=idx(c,r);fn(i,PX[i],PZ[i]);}}
+// stones
+const stones=[], stoneMeshes=[], stoneGeo=new THREE.SphereGeometry(1,40,24);
+function stoneQ(s,x,z){const lx=x-s.x,lz=z-s.z,c=Math.cos(s.yaw),sn=Math.sin(s.yaw);const u=c*lx-sn*lz,v=sn*lx+c*lz;return Math.hypot(u/s.R,v/(s.R*0.78));}
+function underStone(x,z){for(const s of stones)if(stoneQ(s,x,z)<1.08)return true;return false;}
+function rings(s,arr,amt=1){const ext=s.R*1+6*SP+0.2;region(s.x-ext,s.x+ext,s.z-ext,s.z+ext,(i,x,z)=>{const q=stoneQ(s,x,z),d=(q-1)*s.R*0.92;
+  if(d<0){arr[i]=0;return;} const n=6*SP; if(d>n)return; const f=THREE.MathUtils.smoothstep(n-d,0,SP*1.2)*amt;arr[i]+=(A*Math.cos(Math.PI*2*d/SP+Math.PI)-arr[i])*f;});}
+function addStone(x,z,R){const m=new THREE.Mesh(stoneGeo,new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(0.08,0.06,0.22+Math.random()*0.18),roughness:0.42}));
+  const s={x,z,R:R||0.45+Math.random()*0.35,yaw:Math.random()*Math.PI,m};m.scale.set(s.R,s.R*0.5,s.R*0.78);m.castShadow=true;m.receiveShadow=true;scene.add(m);m.userData.s=s;stones.push(s);stoneMeshes.push(m);placeStone(s);return s;}
+function placeStone(s){s.m.position.set(s.x,s.R*0.18,s.z);s.m.rotation.y=s.yaw;}
+function freshPattern(arr){for(let i=0;i<NV;i++)arr[i]=A*Math.cos(Math.PI*2*PZ[i]/SP)*0.8;for(const s of stones)rings(s,arr);}
+addStone(-2.6,-0.8,0.75); addStone(1.8,1.1,0.55); addStone(3.4,-1.6,0.4);
+freshPattern(h); writeGeo();
+// raking
+function rakeSeg(p0,p1){const t=new THREE.Vector2(p1.x-p0.x,p1.z-p0.z),L=t.length();if(L<1e-4)return;t.divideScalar(L);
+  const hw=tines*SP/2, e=hw+0.1;
+  region(Math.min(p0.x,p1.x)-e,Math.max(p0.x,p1.x)+e,Math.min(p0.z,p1.z)-e,Math.max(p0.z,p1.z)+e,(i,x,z)=>{
+    const vx=x-p0.x,vz=z-p0.z,s=vx*t.x+vz*t.y; if(s<-0.05||s>L+0.05)return; const d=-vx*t.y+vz*t.x; const ad=Math.abs(d); if(ad>hw+0.06)return;
+    if(underStone(x,z))return;
+    const g=ad<hw?-A*Math.cos(Math.PI*2*(d+hw)/SP-Math.PI):A*0.9*(1-(ad-hw)/0.06);
+    const f=ad<hw?THREE.MathUtils.smoothstep(hw-ad,0,0.05)*0.9:0.5; h[i]+=(g-h[i])*f;});dirty=true;}
+// input
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2(); let mode=null, last=null, moved=0, smoothT=0;
+function setMouse(e){mouse.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);}
+function hitSand(){ray.setFromCamera(mouse,camera);const p=new THREE.Vector3();return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),0),p)?p:null;}
+const inside=p=>p&&Math.abs(p.x)<W/2-0.05&&Math.abs(p.z)<D/2-0.05;
+addEventListener('pointermove',e=>setMouse(e));
+renderer.domElement.addEventListener('pointerdown',e=>{setMouse(e);ray.setFromCamera(mouse,camera);const hs=ray.intersectObjects(stoneMeshes,false)[0];
+  if(hs){const s=hs.object.userData.s,p=hitSand();mode={stone:s,off:new THREE.Vector3(s.x-p.x,0,s.z-p.z)};cur.classList.add('hold');return;}
+  const p=hitSand(); if(!inside(p))return; mode={rake:true}; last=p; moved=0; cur.classList.add('hold');});
+addEventListener('pointerup',()=>{if(mode&&mode.stone){rings(mode.stone,h);dirty=true;} if(mode&&mode.rake&&moved>0.3)strokes++; mode=null;cur.classList.remove('hold');});
+renderer.domElement.addEventListener('dblclick',e=>{setMouse(e);const p=hitSand();if(!inside(p)||underStone(p.x,p.z)||stones.length>=12)return;const s=addStone(p.x,p.z);rings(s,h);dirty=true;});
+swatches('sw',SAND,i=>{sandMat.color.set(SAND[i]);});
+document.getElementById('rw').oninput=e=>tines=+e.target.value;
+document.getElementById('smooth').onclick=()=>{freshPattern(tgt);smoothT=1;};
+const skEl=document.getElementById('sk'), stEl=document.getElementById('st');
+const clock=new THREE.Clock(); let T=0, frame=0;
+function loop(){
+  const dt=Math.min(clock.getDelta(),1/30); T+=dt;
+  if(mode){const p=hitSand();
+    if(p&&mode.rake&&inside(p)){const d=p.distanceTo(last);if(d>0.04){rakeSeg(last,p);moved+=d;last=p;}}
+    if(p&&mode.stone){const s=mode.stone;s.x=THREE.MathUtils.clamp(p.x+mode.off.x,-W/2+s.R,W/2-s.R);s.z=THREE.MathUtils.clamp(p.z+mode.off.z,-D/2+s.R,D/2-s.R);placeStone(s);
+      region(s.x-s.R,s.x+s.R,s.z-s.R,s.z+s.R,(i,x,z)=>{const q=stoneQ(s,x,z);if(q<1.15){h[i]=q<1?-0.02:h[i]*0.5+0.03;}});dirty=true;}}
+  if(smoothT>0){smoothT-=dt;const f=1-Math.exp(-6*dt);for(let i=0;i<NV;i++)h[i]+=(tgt[i]-h[i])*f;if(smoothT<=0)h.set(tgt);dirty=true;}
+  if(dirty&&frame%1===0){writeGeo();dirty=false;}
+  if(frame++%10===0){skEl.textContent=strokes;stEl.textContent=stones.length;}
+  const a=Math.sin(T*0.06)*0.16;
+  camera.position.set(Math.sin(a)*15.5,13.5+Math.sin(T*0.1)*0.3,Math.cos(a)*15.5); camera.lookAt(1.9,-0.2,-1.4);
+  renderer.render(scene,camera); requestAnimationFrame(loop);
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+window.__t={camera,stones,get strokes(){return strokes}};
+loop();
+
+</script></body></html>

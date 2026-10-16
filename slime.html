@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Squishy Slime</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:"Helvetica Neue",Arial,sans-serif;color:#111;cursor:none;user-select:none}
+canvas{display:block}
+#title{position:fixed;top:34px;left:40px;pointer-events:none}
+#title .lab{font-variant:small-caps;letter-spacing:.18em;font-size:13px;text-transform:lowercase;color:#555}
+#title h1{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:400;font-size:64px;line-height:.95;margin:10px 0 12px}
+#title h1 span{color:#2fbf8f}
+#title p{margin:0;font-size:14px;color:#666}
+#panel{position:fixed;right:32px;top:50%;transform:translateY(-50%);width:220px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid #eee;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:20px;font-size:12px}
+#panel h4{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#888;font-weight:500}
+.sw{display:flex;gap:9px;margin-bottom:20px;flex-wrap:wrap}
+.sw button{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:none;padding:0}
+.sw button.on{box-shadow:0 0 0 2px #111}
+.seg{display:flex;gap:6px;margin-bottom:18px}.seg button{flex:1;border:1px solid #ddd;background:#fff;border-radius:999px;padding:6px 0;font-size:11px;cursor:none}.seg button.on{background:#111;color:#fff;border-color:#111}
+input[type=range]{width:100%;accent-color:#111;margin:0 0 18px;cursor:none}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #eee;padding:9px 0}
+.row b{font-family:Georgia,serif;font-style:italic;font-size:22px;font-weight:400}
+.act{width:100%;margin-top:12px;background:#111;color:#fff;border:0;border-radius:999px;padding:12px;font-size:13px;letter-spacing:.04em;cursor:none}
+.act:hover{background:#333}
+#hint{position:fixed;left:40px;bottom:30px;font-size:12px;letter-spacing:.08em;color:#777;pointer-events:none}
+#cur{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1.5px solid #111;background:rgba(17,17,17,.06);pointer-events:none;transition:width .15s,height .15s,margin .15s,background .15s;z-index:9}
+#cur.hold{width:12px;height:12px;margin:-6px 0 0 -6px;background:#111}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<div id="title"><div class="lab">Nº 27 / Calm Goods</div><h1>Squishy /<br><span>Slime.</span></h1><p>Stretch it, poke it, fold it. Sound on.</p></div>
+<div id="panel"><h4>Slime colour</h4><div class="sw" id="sw"></div>
+<h4>Glitter</h4><div class="seg" id="gl"><button data-g="0" class="on">Off</button><button data-g="1">On</button></div>
+<h4>Stretchiness</h4><input id="str" type="range" min="0" max="1" step="0.01" value="0.6"><h4>Volume</h4><input id="vol" type="range" min="0" max="1" step="0.01" value="0.7">
+<div class="row"><span>Pokes</span><b id="pk">0</b></div>
+<button class="act" id="fold">Fold it</button></div>
+<div id="hint">Grab and pull to stretch · Click to poke</div>
+<div id="cur"></div>
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+import {mergeVertices} from 'three/addons/utils/BufferGeometryUtils.js';
+const cur=document.getElementById('cur');
+addEventListener('pointermove',e=>{cur.style.transform=`translate(${e.clientX}px,${e.clientY}px)`;});
+function swatches(id,cols,cb){const el=document.getElementById(id);cols.forEach((c,i)=>{const b=document.createElement('button');b.style.background=c;if(!i)b.className='on';b.onclick=()=>{[...el.children].forEach((x,j)=>x.className=j===i?'on':'');cb(i);};el.appendChild(b);});}
+
+
+const AU={c:null,m:null,v:0.7,nb:null};
+function auInit(){if(AU.c)return;const C=window.AudioContext||window.webkitAudioContext;if(!C)return;AU.c=new C();AU.m=AU.c.createGain();AU.m.gain.value=AU.v;
+  const comp=AU.c.createDynamicsCompressor();AU.m.connect(comp).connect(AU.c.destination);
+  const b=AU.c.createBuffer(1,AU.c.sampleRate,AU.c.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;AU.nb=b;}
+addEventListener('pointerdown',auInit,{capture:true});
+function noise(dur,f,q,g,type='bandpass',f2,delay=0){const c=AU.c;if(!c)return;const t=c.currentTime+delay;const s=c.createBufferSource();s.buffer=AU.nb;const fl=c.createBiquadFilter();fl.type=type;fl.frequency.setValueAtTime(f,t);if(f2)fl.frequency.exponentialRampToValueAtTime(f2,t+dur);fl.Q.value=q;
+  const ga=c.createGain();ga.gain.setValueAtTime(0.0001,t);ga.gain.exponentialRampToValueAtTime(g,t+0.002);ga.gain.exponentialRampToValueAtTime(0.0001,t+dur);s.connect(fl).connect(ga).connect(AU.m);s.start(t,Math.random()*0.8);s.stop(t+dur+0.03);}
+function tone(f,f2,dur,g,type='sine',delay=0){const c=AU.c;if(!c)return;const t=c.currentTime+delay;const o=c.createOscillator();o.type=type;o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f2,t+dur);
+  const ga=c.createGain();ga.gain.setValueAtTime(0.0001,t);ga.gain.exponentialRampToValueAtTime(g,t+0.004);ga.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(ga).connect(AU.m);o.start(t);o.stop(t+dur+0.03);}
+document.getElementById('vol').oninput=e=>{AU.v=+e.target.value;if(AU.m)AU.m.gain.value=AU.v;};
+function shadowTex(rgb='60,40,40',a=0.2){const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');const r=g.createRadialGradient(64,64,0,64,64,64);r.addColorStop(0,`rgba(${rgb},${a})`);r.addColorStop(1,`rgba(${rgb},0)`);g.fillStyle=r;g.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);}
+function baseScene(){const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.toneMapping=THREE.ACESFilmicToneMapping;document.body.prepend(renderer.domElement);
+  const scene=new THREE.Scene();scene.background=new THREE.Color('#fff');scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),0.04).texture;
+  const camera=new THREE.PerspectiveCamera(34,innerWidth/innerHeight,0.5,80);scene.add(new THREE.HemisphereLight(0xffffff,0xeeeeee,0.8));const dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(4,9,6);scene.add(dl);
+  addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});return {renderer,scene,camera};}
+
+const COLS=['#2fbf8f','#ff6fa8','#7a5cff','#ffb020'];
+const {renderer,scene,camera}=baseScene();
+let g=new THREE.IcosahedronGeometry(1.7,5);g.deleteAttribute('normal');g.deleteAttribute('uv');g=mergeVertices(g);
+const P=g.attributes.position,NV=P.count,rest=new Float32Array(NV*3),D=new Float32Array(NV*3),V=new Float32Array(NV*3);
+for(let i=0;i<NV;i++){let x=P.getX(i),y=P.getY(i),z=P.getZ(i);y=y*0.55;x*=1.15;z*=1.05;if(y<-0.7)y=-0.7+(y+0.7)*0.15;rest.set([x,y+0.78,z],i*3);}
+const nb=[...Array(NV)].map(()=>new Set());const ix=g.index.array;for(let t=0;t<ix.length;t+=3){const a=ix[t],b=ix[t+1],c=ix[t+2];nb[a].add(b).add(c);nb[b].add(a).add(c);nb[c].add(a).add(b);}
+const NB=nb.map(s=>[...s]);
+const mat=new THREE.MeshPhysicalMaterial({color:COLS[0],roughness:0.12,transmission:0.6,thickness:0.9,ior:1.36,clearcoat:1,clearcoatRoughness:0.08,attenuationColor:new THREE.Color(COLS[0]),attenuationDistance:3.5,specularIntensity:1});
+const blob=new THREE.Mesh(g,mat);scene.add(blob);
+const shadow=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({map:shadowTex('30,90,70',0.25),transparent:true,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=0.0;shadow.scale.set(6.5,5,1);shadow.renderOrder=0;scene.add(shadow);
+// inner: air bubbles + glitter (opaque, seen through transmission)
+const bubG=new THREE.SphereGeometry(1,16,12),bubM=new THREE.MeshPhysicalMaterial({color:'#ffffff',roughness:0.05,clearcoat:1,metalness:0,emissive:'#ffffff',emissiveIntensity:0.15});
+const NBUB=7,bubs=new THREE.InstancedMesh(bubG,bubM,NBUB);scene.add(bubs);const bub=[...Array(NBUB)].map(()=>({p:new THREE.Vector3(),r:0,life:0,delay:Math.random()*4}));
+const NG=320,gl=new THREE.InstancedMesh(new THREE.PlaneGeometry(0.07,0.07),new THREE.MeshStandardMaterial({color:'#fff4c0',emissive:'#ffd76a',emissiveIntensity:0.7,metalness:0.6,roughness:0.2,side:THREE.DoubleSide}),NG);gl.visible=false;scene.add(gl);
+const glit=[...Array(NG)].map(()=>{const v=Math.floor(Math.random()*NV);return{v,o:new THREE.Vector3().randomDirection().multiplyScalar(0.25+Math.random()*0.5),q:new THREE.Quaternion().random(),s:Math.random()*6};});
+// state
+let stretch=0.6,grab=null,pokes=0,T=0,fold=-1,creak=null;
+const ray=new THREE.Raycaster(),ndc=new THREE.Vector2(),tmp=new THREE.Vector3(),tmp2=new THREE.Vector3();
+const pos=(i,o)=>o.set(rest[i*3]+D[i*3],rest[i*3+1]+D[i*3+1],rest[i*3+2]+D[i*3+2]);
+function hit(e){ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(ndc,camera);const h=ray.intersectObject(blob)[0];return h;}
+function nearest(p){let b=0,bd=1e9;for(let i=0;i<NV;i++){const d=pos(i,tmp).distanceToSquared(p);if(d<bd){bd=d;b=i;}}return b;}
+function squelch(g=0.5){noise(0.28,1400,1.2,g*0.5,'lowpass',180);tone(220+Math.random()*80,55,0.22,g*0.35);}
+renderer.domElement.addEventListener('pointerdown',e=>{cur.classList.add('hold');const h=hit(e);if(!h)return;const v=nearest(h.point);
+  const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()).negate(),h.point);
+  const w=new Float32Array(NV);const r0=new THREE.Vector3(rest[v*3],rest[v*3+1],rest[v*3+2]);for(let i=0;i<NV;i++){tmp.set(rest[i*3],rest[i*3+1],rest[i*3+2]);w[i]=tmp.distanceToSquared(r0);}
+  grab={v,plane,w,start:h.point.clone(),target:h.point.clone(),sx:e.clientX,sy:e.clientY,moved:false,normal:h.face.normal.clone(),L:0};noise(0.12,600,1,0.12,'lowpass',200);});
+addEventListener('pointermove',e=>{if(!grab)return;if(Math.hypot(e.clientX-grab.sx,e.clientY-grab.sy)>6)grab.moved=true;
+  ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(ndc,camera);ray.ray.intersectPlane(grab.plane,grab.target);});
+function release(snapped){if(!grab)return;
+  if(!grab.moved){// poke: dent that slowly fills
+    for(let i=0;i<NV;i++){const f=Math.exp(-grab.w[i]/0.18);if(f<0.01)continue;tmp.set(rest[i*3]-0,rest[i*3+1]-0.78,rest[i*3+2]).normalize();D[i*3]-=tmp.x*0.45*f;D[i*3+1]-=tmp.y*0.45*f;D[i*3+2]-=tmp.z*0.45*f;}
+    pokes++;document.getElementById('pk').textContent=pokes;squelch(0.45);}
+  else if(snapped){noise(0.06,2600,2,0.35);tone(300,90,0.12,0.25);}else noise(0.3,700,0.8,0.15,'lowpass',150);
+  grab=null;}
+addEventListener('pointerup',()=>{cur.classList.remove('hold');release(false);});
+swatches('sw',COLS,i=>{mat.color.set(COLS[i]);mat.attenuationColor.set(COLS[i]);});
+document.querySelectorAll('#gl button').forEach(b=>b.onclick=()=>{gl.visible=b.dataset.g==='1';document.querySelectorAll('#gl button').forEach(x=>x.classList.toggle('on',x===b));});
+document.getElementById('str').oninput=e=>stretch=+e.target.value;
+document.getElementById('fold').onclick=()=>{fold=0;squelch(0.6);};
+const clock=new THREE.Clock(),m4=new THREE.Matrix4(),one=new THREE.Vector3(1,1,1),q=new THREE.Quaternion(),pv=new THREE.Vector3(),sv=new THREE.Vector3();
+const L0=new Float32Array(NV*3);
+function step(dt){
+  const k=7,c=3.2,cpl=26;
+  // grab: pull region toward target, gaussian narrows as strand lengthens
+  let gw=null;
+  if(grab&&grab.moved){const dv=grab.v;pos(dv,tmp);const pull=tmp2.copy(grab.target).sub(grab.start);grab.L=pull.length();const maxL=1.5+stretch*4.5;
+    if(grab.L>maxL){release(true);}else{const sig=(0.55/(1+grab.L*0.6))**2;gw=grab.w;
+      for(let i=0;i<NV;i++){const f=Math.exp(-gw[i]/sig);if(f<0.003)continue;const sag=-0.35*grab.L*f*(1-f)*4;
+        const tx=pull.x*f,ty=pull.y*f+sag,tz=pull.z*f;D[i*3]+=(tx-D[i*3])*Math.min(1,dt*14*f);D[i*3+1]+=(ty-D[i*3+1])*Math.min(1,dt*14*f);D[i*3+2]+=(tz-D[i*3+2])*Math.min(1,dt*14*f);V[i*3]*=0.5;V[i*3+1]*=0.5;V[i*3+2]*=0.5;}
+      if(AU.c&&Math.random()<0.3)noise(0.05,300+grab.L*300,3,0.03+0.02*grab.L,'bandpass');}}
+  // smoothing (viscous coupling) + spring to rest (dents refill slowly)
+  for(let i=0;i<NV;i++){const n=NB[i];let ax=0,ay=0,az=0;for(const j of n){ax+=D[j*3];ay+=D[j*3+1];az+=D[j*3+2];}const m=n.length;L0[i*3]=ax/m-D[i*3];L0[i*3+1]=ay/m-D[i*3+1];L0[i*3+2]=az/m-D[i*3+2];}
+  for(let i=0;i<NV;i++){const gf=gw?Math.exp(-gw[i]/((0.55/(1+grab.L*0.6))**2)):0;for(let a=0;a<3;a++){const j=i*3+a;let f=-k*D[j]+cpl*L0[j]*(1-gf)-c*V[j]*2;if(a===1&&gf<0.5)f-=0;V[j]+=f*dt;D[j]+=V[j]*dt*(1-gf);}
+    const y=rest[i*3+1]+D[i*3+1];if(y<0.01){D[i*3+1]=0.01-rest[i*3+1];V[i*3+1]=0;}}
+}
+function loop(){const dt=Math.min(clock.getDelta(),1/30);T+=dt;
+  if(fold>=0){fold+=dt;const a=Math.min(1,fold/0.9);const th=Math.PI*0.9*Math.sin(a*Math.PI*0.5);
+    if(fold<0.9){for(let i=0;i<NV;i++){const x=rest[i*3],y=rest[i*3+1];if(x<0.1)continue;const px=0.1,py=1.4;const rx=x-px,ry=y-py;const nx=px+rx*Math.cos(th)-ry*Math.sin(th)*-1,ny=py+rx*Math.sin(-th)*-1+ry*Math.cos(th);
+      const f=Math.min(1,(x-0.1)*2);D[i*3]+=((nx-x)*f*0.6-D[i*3])*0.25;D[i*3+1]+=((Math.max(0.05,ny)-y)*f*0.5-D[i*3+1])*0.25;}}
+    else{fold=-1;squelch(0.4);}}
+  step(dt/2);step(dt/2);
+  for(let i=0;i<NV;i++)P.setXYZ(i,rest[i*3]+D[i*3],rest[i*3+1]+D[i*3+1],rest[i*3+2]+D[i*3+2]);P.needsUpdate=true;g.computeVertexNormals();g.computeBoundingSphere();
+  // bubbles rise, pop at surface
+  bub.forEach((b,k)=>{if(b.life<=0){b.delay-=dt;if(b.delay<=0){b.life=1;b.r=0.05+Math.random()*0.09;b.p.set((Math.random()-.5)*2,0.35,(Math.random()-.5)*1.4);}}
+    else{b.p.y+=dt*0.12;b.p.x+=Math.sin(T+k)*0.002;const top=0.78+0.94*Math.sqrt(Math.max(0,1-(b.p.x/1.95)**2-(b.p.z/1.78)**2));
+      if(b.p.y+b.r>top-0.05){b.life=0;b.delay=2+Math.random()*5;squelch(0.25);const v=nearest(b.p);for(const j of[v,...NB[v]]){D[j*3+1]-=0.08;}}}
+    const s=b.life>0?b.r:0.0001;m4.compose(pv.copy(b.p),q.identity(),sv.set(s,s*0.9,s));bubs.setMatrixAt(k,m4);});bubs.instanceMatrix.needsUpdate=true;
+  if(gl.visible){glit.forEach((o,k)=>{pos(o.v,pv);tmp.set(0,0.78,0).sub(pv).normalize().multiplyScalar(0.35);pv.add(tmp).addScaledVector(o.o,0.4);q.copy(o.q);q.multiply(tmp2.set(0,0,0)&&new THREE.Quaternion().setFromAxisAngle(one.set(0,1,0),T*0.5+o.s));m4.compose(pv,q,sv.set(1,1,1));gl.setMatrixAt(k,m4);});gl.instanceMatrix.needsUpdate=true;}
+  camera.position.set(0.6+Math.sin(T*0.1)*1.3,6.2+Math.sin(T*0.08)*0.4,9.5);camera.lookAt(0.4,0.5,0);
+  renderer.render(scene,camera);requestAnimationFrame(loop);}
+loop();
+window.__t={camera,get pokes(){return pokes},D,blob};
+
+</script></body></html>

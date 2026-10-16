@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bubble Wrap</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:"Helvetica Neue",Arial,sans-serif;color:#111;cursor:none;user-select:none}
+canvas{display:block}
+#title{position:fixed;top:34px;left:40px;pointer-events:none}
+#title .lab{font-variant:small-caps;letter-spacing:.18em;font-size:13px;text-transform:lowercase;color:#555}
+#title h1{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:400;font-size:64px;line-height:.95;margin:10px 0 12px}
+#title h1 span{color:#3d8bff}
+#title p{margin:0;font-size:14px;color:#666}
+#panel{position:fixed;right:32px;top:50%;transform:translateY(-50%);width:220px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid #eee;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:20px;font-size:12px}
+#panel h4{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#888;font-weight:500}
+.sw{display:flex;gap:9px;margin-bottom:20px;flex-wrap:wrap}
+.sw button{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:none;padding:0}
+.sw button.on{box-shadow:0 0 0 2px #111}
+.seg{display:flex;gap:6px;margin-bottom:18px}.seg button{flex:1;border:1px solid #ddd;background:#fff;border-radius:999px;padding:6px 0;font-size:11px;cursor:none}.seg button.on{background:#111;color:#fff;border-color:#111}
+input[type=range]{width:100%;accent-color:#111;margin:0 0 18px;cursor:none}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #eee;padding:9px 0}
+.row b{font-family:Georgia,serif;font-style:italic;font-size:22px;font-weight:400}
+.act{width:100%;margin-top:12px;background:#111;color:#fff;border:0;border-radius:999px;padding:12px;font-size:13px;letter-spacing:.04em;cursor:none}
+.act:hover{background:#333}
+#hint{position:fixed;left:40px;bottom:30px;font-size:12px;letter-spacing:.08em;color:#777;pointer-events:none}
+#cur{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1.5px solid #111;background:rgba(17,17,17,.06);pointer-events:none;transition:width .15s,height .15s,margin .15s,background .15s;z-index:9}
+#cur.hold{width:12px;height:12px;margin:-6px 0 0 -6px;background:#111}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<div id="title"><div class="lab">Nº 25 / Calm Goods</div><h1>Bubble /<br><span>Wrap.</span></h1><p>A sheet of air, waiting to be popped. Sound on.</p></div>
+<div id="panel"><h4>Plastic tint</h4><div class="sw" id="sw"></div>
+<h4>Sheet size</h4><input id="size" type="range" min="6" max="14" step="1" value="10"><h4>Volume</h4><input id="vol" type="range" min="0" max="1" step="0.01" value="0.7">
+<div class="row"><span>Popped</span><b id="pc">0</b></div>
+<div class="row"><span>Streak</span><b id="st">×0</b></div>
+<button class="act" id="fresh">Fresh sheet</button></div>
+<div id="hint">Press to pop · Drag to pop a row</div>
+<div id="cur"></div>
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+const cur=document.getElementById('cur');
+addEventListener('pointermove',e=>{cur.style.transform=`translate(${e.clientX}px,${e.clientY}px)`;});
+function swatches(id,cols,cb){const el=document.getElementById(id);cols.forEach((c,i)=>{const b=document.createElement('button');b.style.background=c;if(!i)b.className='on';b.onclick=()=>{[...el.children].forEach((x,j)=>x.className=j===i?'on':'');cb(i);};el.appendChild(b);});}
+
+
+const AU={c:null,m:null,v:0.7,nb:null};
+function auInit(){if(AU.c)return;const C=window.AudioContext||window.webkitAudioContext;if(!C)return;AU.c=new C();AU.m=AU.c.createGain();AU.m.gain.value=AU.v;
+  const comp=AU.c.createDynamicsCompressor();AU.m.connect(comp).connect(AU.c.destination);
+  const b=AU.c.createBuffer(1,AU.c.sampleRate,AU.c.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;AU.nb=b;}
+addEventListener('pointerdown',auInit,{capture:true});
+function noise(dur,f,q,g,type='bandpass',f2,delay=0){const c=AU.c;if(!c)return;const t=c.currentTime+delay;const s=c.createBufferSource();s.buffer=AU.nb;const fl=c.createBiquadFilter();fl.type=type;fl.frequency.setValueAtTime(f,t);if(f2)fl.frequency.exponentialRampToValueAtTime(f2,t+dur);fl.Q.value=q;
+  const ga=c.createGain();ga.gain.setValueAtTime(0.0001,t);ga.gain.exponentialRampToValueAtTime(g,t+0.002);ga.gain.exponentialRampToValueAtTime(0.0001,t+dur);s.connect(fl).connect(ga).connect(AU.m);s.start(t,Math.random()*0.8);s.stop(t+dur+0.03);}
+function tone(f,f2,dur,g,type='sine',delay=0){const c=AU.c;if(!c)return;const t=c.currentTime+delay;const o=c.createOscillator();o.type=type;o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f2,t+dur);
+  const ga=c.createGain();ga.gain.setValueAtTime(0.0001,t);ga.gain.exponentialRampToValueAtTime(g,t+0.004);ga.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(ga).connect(AU.m);o.start(t);o.stop(t+dur+0.03);}
+document.getElementById('vol').oninput=e=>{AU.v=+e.target.value;if(AU.m)AU.m.gain.value=AU.v;};
+function shadowTex(rgb='60,40,40',a=0.2){const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');const r=g.createRadialGradient(64,64,0,64,64,64);r.addColorStop(0,`rgba(${rgb},${a})`);r.addColorStop(1,`rgba(${rgb},0)`);g.fillStyle=r;g.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);}
+function baseScene(){const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.toneMapping=THREE.ACESFilmicToneMapping;document.body.prepend(renderer.domElement);
+  const scene=new THREE.Scene();scene.background=new THREE.Color('#fff');scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),0.04).texture;
+  const camera=new THREE.PerspectiveCamera(34,innerWidth/innerHeight,0.5,80);scene.add(new THREE.HemisphereLight(0xffffff,0xeeeeee,0.8));const dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(4,9,6);scene.add(dl);
+  addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});return {renderer,scene,camera};}
+
+const TINT=['#a9d4ff','#bfeacb','#ffc4d8','#e8e8e8'];
+const {renderer,scene,camera}=baseScene();
+const root=new THREE.Group();scene.add(root);
+const sheetMat=new THREE.MeshPhysicalMaterial({color:TINT[0],roughness:0.18,clearcoat:1,transparent:true,opacity:0.5,depthWrite:false,side:THREE.DoubleSide});
+const bubMat=new THREE.MeshPhysicalMaterial({color:TINT[0],roughness:0.04,clearcoat:1,clearcoatRoughness:0.05,transparent:true,opacity:0.42,depthWrite:false,iridescence:0.3});
+const flatMat=new THREE.MeshPhysicalMaterial({color:TINT[0],roughness:0.3,clearcoat:1,transparent:true,opacity:0.75,depthWrite:false,side:THREE.DoubleSide});
+const shadow=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({map:shadowTex('70,90,120',0.18),transparent:true,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=-0.35;shadow.renderOrder=0;scene.add(shadow);
+const bubG=new THREE.SphereGeometry(0.5,28,12,0,Math.PI*2,0,Math.PI/2);
+const flatG=(()=>{const g=new THREE.CircleGeometry(0.44,28,0,Math.PI*2);g.rotateX(-Math.PI/2);const p=g.attributes.position;for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i),r=Math.hypot(x,z);p.setY(i,(Math.sin(x*23+z*7)*0.5+Math.sin(z*19-x*11)*0.5)*0.025*(r/0.44)+0.03*(1-r/0.44));}g.computeVertexNormals();return g;})();
+let N=10,sheet,bubs,flats,cells=[],ripples=[],popped=0,streak=0,lastPop=-9,T=0;
+function build(){if(sheet){root.remove(sheet,bubs,flats);sheet.geometry.dispose();bubs.dispose();flats.dispose();}
+  const W=N+0.6;sheet=new THREE.Mesh(new THREE.PlaneGeometry(W,W,N*5,N*5).rotateX(-Math.PI/2),sheetMat);sheet.renderOrder=1;
+  bubs=new THREE.InstancedMesh(bubG,bubMat,N*N);bubs.renderOrder=2;flats=new THREE.InstancedMesh(flatG,flatMat,N*N);flats.renderOrder=3;
+  root.add(sheet,bubs,flats);cells=[];for(let j=0;j<N;j++)for(let i=0;i<N;i++){const x=i-(N-1)/2,z=j-(N-1)/2;cells.push({x,z,sq:0,popped:false,inf:1,infAt:-1,flat:0,rv:Math.random()});}
+  shadow.scale.set(W*1.5,W*1.5,1);popped=0;}
+build();
+const sheetH=(x,z)=>{let h=0;for(const r of ripples){const a=T-r.t,d=Math.hypot(x-r.x,z-r.z);h+=r.a*Math.exp(-a*3.2)*Math.sin(d*3.2-a*15)*Math.exp(-d*0.35)*Math.min(1,a*20);}return h;};
+const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),pv=new THREE.Vector3(),sv=new THREE.Vector3();
+const pEl=document.getElementById('pc'),sEl=document.getElementById('st');
+function pop(c){if(c.popped)return;c.popped=true;c.flat=0;popped++;streak=(T-lastPop<0.6)?streak+1:1;lastPop=T;ripples.push({x:c.x,z:c.z,t:T,a:0.05});if(ripples.length>8)ripples.shift();
+  const f=1700+Math.random()*2600;noise(0.05+Math.random()*0.03,f,1.2,0.9);noise(0.012,6000,0.7,0.5,'highpass');tone(150+Math.random()*80,60,0.07,0.35);
+  pEl.textContent=popped;sEl.textContent='×'+streak;}
+// interaction
+const ray=new THREE.Raycaster(),pl=new THREE.Plane(new THREE.Vector3(0,1,0),-0.15),ndc=new THREE.Vector2();let down=false,held=null;
+function cellAt(e){ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(ndc,camera);const p=new THREE.Vector3();if(!ray.ray.intersectPlane(pl,p))return null;
+  const i=Math.round(p.x+(N-1)/2),j=Math.round(p.z+(N-1)/2);if(i<0||j<0||i>=N||j>=N)return null;const c=cells[j*N+i];return Math.hypot(p.x-c.x,p.z-c.z)<0.48?c:null;}
+renderer.domElement.addEventListener('pointerdown',e=>{down=true;cur.classList.add('hold');const c=cellAt(e);if(c&&!c.popped){held=c;noise(0.04,900,1,0.15);}});
+addEventListener('pointermove',e=>{if(!down)return;const c=cellAt(e);if(c&&c!==held&&!c.popped){if(held&&!held.popped)pop(held);held=c;pop(c);}});
+addEventListener('pointerup',()=>{down=false;cur.classList.remove('hold');if(held&&!held.popped&&held.sq>0.25)pop(held);held=null;});
+swatches('sw',TINT,i=>{sheetMat.color.set(TINT[i]);bubMat.color.set(TINT[i]);flatMat.color.set(TINT[i]);});
+document.getElementById('size').oninput=e=>{N=+e.target.value;build();pEl.textContent=0;};
+document.getElementById('fresh').onclick=()=>{cells.forEach(c=>{if(c.popped){c.infAt=T+(c.x+c.z+N)*0.045;}});popped=0;streak=0;pEl.textContent=0;sEl.textContent='×0';};
+const clock=new THREE.Clock();
+function loop(){const dt=Math.min(clock.getDelta(),1/30);T+=dt;
+  const sp=sheet.geometry.attributes.position;if(ripples.length&&T-ripples[ripples.length-1].t<2.5){for(let i=0;i<sp.count;i++)sp.setY(i,sheetH(sp.getX(i),sp.getZ(i)));sp.needsUpdate=true;sheet.geometry.computeVertexNormals();}
+  else if(ripples.length){for(let i=0;i<sp.count;i++)sp.setY(i,0);sp.needsUpdate=true;ripples=[];}
+  cells.forEach((c,k)=>{
+    if(c.infAt>=0&&T>=c.infAt){c.popped=false;c.inf=0;c.infAt=-1;c.sq=0;if(Math.random()<0.25)tone(500+Math.random()*300,900,0.08,0.05);}
+    if(!c.popped&&c.inf<1)c.inf=Math.min(1,c.inf+dt*3);
+    if(c===held&&!c.popped){c.sq=Math.min(1,c.sq+dt*5);if(c.sq>=1)pop(c);}else if(!c.popped)c.sq=Math.max(0,c.sq-dt*6);
+    if(c.popped)c.flat=Math.min(1,c.flat+dt*14);
+    const h=sheetH(c.x,c.z);const e=c.inf<1?1-Math.pow(1-c.inf,3)*1+Math.sin(c.inf*Math.PI)*0.25:1;
+    const sq=c.sq,ws=c.popped?0.001:1;
+    sv.set((1+sq*0.18)*e*ws+0.0001,(0.55*(1-sq*0.55)*e+(c.popped?0:0))*ws+0.0001,(1+sq*0.18)*e*ws+0.0001);
+    m4.compose(pv.set(c.x,h,c.z),q,sv);bubs.setMatrixAt(k,m4);
+    const fs=c.popped?0.001+c.flat:0.001;m4.compose(pv.set(c.x,h+0.002,c.z),q.setFromAxisAngle(sv.set(0,1,0),c.rv*6),sv.set(fs,fs,fs));q.identity();flats.setMatrixAt(k,m4);});
+  bubs.instanceMatrix.needsUpdate=true;flats.instanceMatrix.needsUpdate=true;
+  const d=N*1.45+5;camera.position.set(N*0.12+Math.sin(T*0.1)*0.8,d*0.95,d*0.82+Math.cos(T*0.08)*0.5);camera.lookAt(N*0.07,-0.6,N*0.02);
+  renderer.render(scene,camera);requestAnimationFrame(loop);}
+loop();
+window.__t={get popped(){return popped},cells:()=>cells,pop:i=>pop(cells[i]),camera};
+
+</script></body></html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{Word1}} {{Word2}}</title>
+<!-- 版式 CSS 从系列页面原样复制。只改 {{ACCENT}}（标题第二个词的颜色），其余不要动。 -->
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:"Helvetica Neue",Arial,sans-serif;color:#111;cursor:none;user-select:none}
+canvas{display:block}
+#title{position:fixed;top:34px;left:40px;pointer-events:none}
+#title .lab{font-variant:small-caps;letter-spacing:.18em;font-size:13px;text-transform:lowercase;color:#555}
+#title h1{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:400;font-size:64px;line-height:.95;margin:10px 0 12px}
+#title h1 span{color:{{ACCENT}}}
+#title p{margin:0;font-size:14px;color:#666}
+#panel{position:fixed;right:32px;top:50%;transform:translateY(-50%);width:220px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid #eee;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:20px;font-size:12px}
+#panel h4{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#888;font-weight:500}
+.sw{display:flex;gap:9px;margin-bottom:20px;flex-wrap:wrap}
+.sw button{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:none;padding:0}
+.sw button.on{box-shadow:0 0 0 2px #111}
+.seg{display:flex;gap:6px;margin-bottom:18px}.seg button{flex:1;border:1px solid #ddd;background:#fff;border-radius:999px;padding:6px 0;font-size:11px;cursor:none}.seg button.on{background:#111;color:#fff;border-color:#111}
+input[type=range]{width:100%;accent-color:#111;margin:0 0 18px;cursor:none}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #eee;padding:9px 0}
+.row b{font-family:Georgia,serif;font-style:italic;font-size:22px;font-weight:400}
+.act{width:100%;margin-top:12px;background:#111;color:#fff;border:0;border-radius:999px;padding:12px;font-size:13px;letter-spacing:.04em;cursor:none}
+.act:hover{background:#333}
+#hint{position:fixed;left:40px;bottom:30px;font-size:12px;letter-spacing:.08em;color:#777;pointer-events:none}
+#cur{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1.5px solid #111;background:rgba(17,17,17,.06);pointer-events:none;transition:width .15s,height .15s,margin .15s,background .15s;z-index:9}
+#cur.hold{width:12px;height:12px;margin:-6px 0 0 -6px;background:#111}</style>
+<!-- 需要真刚体（堆叠、推倒、轨道）时在 imports 里加一行：
+     "cannon-es":"https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js" -->
+<script type="importmap">{"imports":{
+"three":"https://unpkg.com/three@0.160.0/build/three.module.js",
+"three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<!-- 左上：编号 / 类别 + 衬线斜体两行标题（第二个词上强调色，带句号）+ 一句话 -->
+<div id="title"><div class="lab">Nº {{NN}} / {{Kind}} Goods</div><h1>{{Word1}} /<br><span>{{Word2}}.</span></h1><p>{{One plain sentence about what it is.}}</p></div>
+<!-- 右侧面板：色块 → 一个滑块 → 2–3 行实时计数 → 一个黑色按钮。可选一组 .seg 切换，见 SKILL.md -->
+<div id="panel"><h4>{{Swatch label}}</h4><div class="sw" id="sw"></div>
+<h4>{{Slider label}}</h4><input id="knob" type="range" min="0" max="1" step="0.01" value="0.5">
+<div class="row"><span>{{Counter A}}</span><b id="ca">0</b></div>
+<div class="row"><span>{{Counter B}}</span><b id="cb">0</b></div>
+<button class="act" id="act">{{Button verb phrase}}</button></div>
+<!-- 左下：三条操作提示，用 " · " 隔开 -->
+<div id="hint">{{Verb to do X · Verb to do Y · Key to do Z}}</div>
+<div id="cur"></div>
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+
+// ---------- cursor + swatches（固定） ----------
+const cur=document.getElementById('cur');
+addEventListener('pointermove',e=>{cur.style.transform=`translate(${e.clientX}px,${e.clientY}px)`;});
+function swatches(id,cols,cb){const el=document.getElementById(id);cols.forEach((c,i)=>{const b=document.createElement('button');b.style.background=c;if(!i)b.className='on';
+  b.onclick=()=>{[...el.children].forEach((x,j)=>x.className=j===i?'on':'');cb(i);};el.appendChild(b);});}
+
+// ---------- state ----------
+const COLORS=['{{ACCENT}}','#ff8a1f','#ffc23a','#3dbb58','#2f7bff']; // 5 个色，第一个就是标题强调色
+let color=0, knob=0.5, countA=0, countB=0;
+
+// ---------- renderer / scene（固定） ----------
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5)); renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.05;
+document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#ffffff');
+const pmrem=new THREE.PMREMGenerator(renderer);
+scene.environment=pmrem.fromScene(new RoomEnvironment(),0.04).texture; // 透明/光泽材质全靠它，不要删
+const camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,0.1,200);
+scene.add(new THREE.HemisphereLight(0xffffff,0xf2f2f2,0.7));
+const sun=new THREE.DirectionalLight(0xffffff,1.5); sun.position.set(6,14,5); sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024); Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:1,far:40});
+sun.shadow.radius=6; sun.shadow.bias=-0.0008; scene.add(sun);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(80,80),new THREE.ShadowMaterial({opacity:0.13}));
+floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
+
+// 软接触阴影贴图：物件多、或不想开 shadowMap 时，在每个物件脚下放一片
+const blobTex=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');const g=x.createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,'rgba(60,50,60,.28)');g.addColorStop(1,'rgba(60,50,60,0)');x.fillStyle=g;x.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);})();
+const blobGeo=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);
+
+// ---------- 手感工具（见 references/feel.md） ----------
+// 欠阻尼弹簧：z<1 会回弹。k 越小越软，z 越小越晃。
+class Spring{constructor(x=0){this.x=x;this.v=0;}
+  step(target,k,z,dt){this.v+=(-k*(this.x-target)-2*Math.sqrt(k)*z*this.v)*dt;this.x+=this.v*dt;return this.x;}
+  kick(dv){this.v+=dv;}}
+// 滑块 → 弹簧性格：往右更软、更晃。所有弹簧共用这一组，手感才统一。
+const feel=()=>({k:300-230*knob, z:0.3-0.22*knob});
+
+// 可形变材质：MeshPhysicalMaterial + 顶点着色器形变。uniform 全为 0 时不形变。
+// 物件局部坐标原点在中心，uHH = 半高（几何体单位）。
+// 一个物件由几块 mesh 组成（比如布丁和顶上的焦糖）时，先 softUniforms() 一次，再把同一个 u 传给每块的材质，它们就一起变形。
+const softUniforms=()=>({uSquash:{value:0},uStretch:{value:0},uHH:{value:0.5},uExt:{value:0.5},uShear:{value:new THREE.Vector2()},
+  uDir:{value:new THREE.Vector3(0,1,0)},uPoke:{value:new THREE.Vector3(0,1,0)},uPA:{value:0},uWob:{value:0},uT:{value:0}});
+function softMaterial(params,u=softUniforms()){
+  const m=new THREE.MeshPhysicalMaterial(params);
+  m.onBeforeCompile=sh=>{Object.assign(sh.uniforms,u);
+    sh.vertexShader=sh.vertexShader.replace('#include <common>',`#include <common>
+uniform float uSquash,uStretch,uHH,uExt,uPA,uWob,uT; uniform vec2 uShear; uniform vec3 uDir,uPoke;
+vec3 soft(vec3 p,vec3 n){
+  float h=clamp((p.y+uHH)/(2.0*uHH),0.0,1.3);             // 0 底 → 1 顶
+  p.y=(p.y+uHH)*(1.0-uSquash)-uHH;                         // 压扁：底不动，顶往下
+  p.xz*=1.0+uSquash*0.55*(0.6+0.4*sin(h*3.14159));         // 腰部鼓出去，近似保体积
+  p.xz+=uShear*h*2.0*uHH;                                  // 剪切：顶晃，底钉住
+  float t=dot(p,uDir), f=smoothstep(-uExt,uExt,t);
+  p+=uDir*uStretch*f*1.6;                                  // 拉长：朝 uDir 那一侧被拽出去
+  p-=(p-uDir*t)*uStretch*0.22*f;                           //        同时变细
+  float pk=smoothstep(0.45,1.0,dot(normalize(p+1e-5),uPoke));
+  p-=n*uPA*pk*0.35*uHH; p+=n*uPA*0.06*(1.0-pk)*uHH;        // 戳：按下去一个坑，别处微鼓
+  p+=n*sin(p.y*7.0+uT*13.0)*sin(p.x*5.0+uT*9.0)*uWob;      // 余震小抖
+  return p;}`).replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed=soft(transformed,normal);');};
+  m.customProgramCacheKey=()=>'soft'; // 所有实例共用一个 shader program
+  m.userData.u=u; return m;
+}
+
+// ---------- objects ----------
+// TODO 物件：几何体缓存复用，每个物件一份材质（为了独立 uniform），数量设上限。
+const things=[], pickables=[];
+
+// ---------- input ----------
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2(); let held=null;
+function setMouse(e){mouse.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);}
+function hitPlane(plane){ray.setFromCamera(mouse,camera);const v=new THREE.Vector3();return ray.ray.intersectPlane(plane,v)?v:null;}
+addEventListener('pointermove',setMouse);
+renderer.domElement.addEventListener('pointerdown',e=>{setMouse(e);ray.setFromCamera(mouse,camera);
+  const h=ray.intersectObjects(pickables,false)[0]; if(!h)return;
+  // TODO 抓起：记下物件、命中点、拖拽平面、上一帧位置（用于松手时的抛出速度）
+  cur.classList.add('hold');});
+addEventListener('pointerup',()=>{if(!held)return;
+  // TODO 松手：速度 clampLength 到上限，给回弹一个 kick
+  held=null; cur.classList.remove('hold');});
+
+// ---------- UI ----------
+swatches('sw',COLORS,i=>color=i);
+document.getElementById('knob').oninput=e=>knob=+e.target.value;
+document.getElementById('act').onclick=()=>{/* TODO 再来一些 / 一键还原 */};
+const caEl=document.getElementById('ca'), cbEl=document.getElementById('cb');
+
+// ---------- loop ----------
+const clock=new THREE.Clock(); let T=0, frame=0, fps=60;
+function loop(){
+  const dt=Math.min(clock.getDelta(),1/30); T+=dt; fps+=(1/Math.max(dt,1e-3)-fps)*0.05;
+  const {k,z}=feel();
+  // TODO 每帧：拖拽更新 → 物理 → 弹簧（刚度高时分 4 个子步）→ 写回 uniforms / transform
+  if(frame++%10===0){caEl.textContent=countA;cbEl.textContent=countB;} // DOM 每 10 帧更新一次
+  // 相机：缓慢漂移，不给轨道控制。lookAt 的 x 偏正，主体落在画面偏左，避开右侧面板
+  const a=0.6+Math.sin(T*0.08)*0.22;
+  camera.position.set(Math.sin(a)*15,9+Math.sin(T*0.1)*0.3,Math.cos(a)*15); camera.lookAt(1.6,0.8,0);
+  renderer.render(scene,camera); requestAnimationFrame(loop);
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+window.__toy={scene,camera,things,get fps(){return fps},get held(){return held}}; // 调试/验证用：再把爽点函数和关键计数也挂上来
+loop();
+</script></body></html>

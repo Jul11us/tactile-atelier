@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jelly Bricks</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:"Helvetica Neue",Arial,sans-serif;color:#111;cursor:none}
+canvas{display:block}
+#title{position:fixed;top:34px;left:40px;pointer-events:none}
+#title .lab{font-variant:small-caps;letter-spacing:.18em;font-size:13px;text-transform:lowercase;color:#555}
+#title h1{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:400;font-size:64px;line-height:.95;margin:10px 0 12px}
+#title h1 span{color:#e8323c}
+#title p{margin:0;font-size:14px;color:#666}
+#panel{position:fixed;right:32px;top:50%;transform:translateY(-50%);width:220px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid #eee;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:20px;font-size:12px}
+#panel h4{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#888;font-weight:500}
+.sw{display:flex;gap:9px;margin-bottom:20px}
+.sw button{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:none;padding:0}
+.sw button.on{box-shadow:0 0 0 2px #111}
+input[type=range]{width:100%;accent-color:#111;margin:0 0 18px;cursor:none}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #eee;padding:9px 0}
+.row b{font-family:Georgia,serif;font-style:italic;font-size:22px;font-weight:400}
+#pour{width:100%;margin-top:12px;background:#111;color:#fff;border:0;border-radius:999px;padding:12px;font-size:13px;letter-spacing:.04em;cursor:none}
+#pour:hover{background:#333}
+#hint{position:fixed;left:40px;bottom:30px;font-size:12px;letter-spacing:.08em;color:#777;pointer-events:none}
+#cur{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1.5px solid #111;background:rgba(17,17,17,.06);pointer-events:none;transition:transform .15s,background .15s;z-index:9}
+#cur.hold{transform:scale(.45);background:#111}
+</style>
+<script type="importmap">{"imports":{
+"three":"https://unpkg.com/three@0.160.0/build/three.module.js",
+"three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/",
+"cannon-es":"https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"}}</script>
+</head><body>
+<div id="title"><div class="lab">Nº 09 / Soft Goods</div><h1>Jelly /<br><span>Bricks.</span></h1><p>Translucent gummy bricks to pull, stack and topple.</p></div>
+<div id="panel">
+<h4>Flavor</h4><div class="sw" id="sw"></div>
+<h4>Wobble</h4><input id="wob" type="range" min="0" max="1" step="0.01" value="0.5">
+<div class="row"><span>Stack height</span><b id="sh">1</b></div>
+<div class="row"><span>Bricks</span><b id="bc">10</b></div>
+<button id="pour">Pour more bricks</button>
+</div>
+<div id="hint">Grab to lift · Drop to snap · Space to wobble</div>
+<div id="cur"></div>
+<script type="module">
+import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
+import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+
+const H=1.2, HH=H/2;
+const COLORS=['#e8323c','#ff8a1f','#ffc23a','#3dbb58','#2f7bff'];
+const SIZES=[[2,1],[2,2],[3,2],[4,2]];
+let flavor=0, wobble=0.5;
+
+// ---------- renderer / scene ----------
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.05;
+document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#ffffff');
+const pmrem=new THREE.PMREMGenerator(renderer);
+scene.environment=pmrem.fromScene(new RoomEnvironment(),0.04).texture;
+const camera=new THREE.PerspectiveCamera(38,innerWidth/innerHeight,0.1,200);
+const hemi=new THREE.HemisphereLight(0xffffff,0xf2f2f2,0.6); scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xffffff,1.6); sun.position.set(6,14,5); sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024); Object.assign(sun.shadow.camera,{left:-13,right:13,top:13,bottom:-13,near:1,far:40});
+sun.shadow.radius=6; sun.shadow.bias=-0.0008; scene.add(sun);
+const floorMesh=new THREE.Mesh(new THREE.PlaneGeometry(80,80),new THREE.ShadowMaterial({opacity:0.13}));
+floorMesh.rotation.x=-Math.PI/2; floorMesh.receiveShadow=true; scene.add(floorMesh);
+
+// glow texture
+const gc=document.createElement('canvas'); gc.width=gc.height=128;
+const g2=gc.getContext('2d'); const gr=g2.createRadialGradient(64,64,0,64,64,64);
+gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.45,'rgba(255,255,255,.45)'); gr.addColorStop(1,'rgba(255,255,255,0)');
+g2.fillStyle=gr; g2.fillRect(0,0,128,128); const glowTex=new THREE.CanvasTexture(gc);
+const glowGeo=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);
+
+// ---------- geometry ----------
+const geoCache={};
+const studProfile=[];
+studProfile.push(new THREE.Vector2(0.0001,-0.05),new THREE.Vector2(0.3,-0.05),new THREE.Vector2(0.3,0.13));
+for(let i=0;i<=5;i++){const a=i/5*Math.PI/2;studProfile.push(new THREE.Vector2(0.22+0.08*Math.cos(a),0.13+0.08*Math.sin(a)));}
+studProfile.push(new THREE.Vector2(0.0001,0.21));
+const studGeo=new THREE.LatheGeometry(studProfile,16);
+function brickGeo(w,d){
+  const k=w+'x'+d; if(geoCache[k])return geoCache[k];
+  const parts=[new RoundedBoxGeometry(w,H,d,3,0.16)];
+  for(let i=0;i<w;i++)for(let j=0;j<d;j++){
+    const s=studGeo.clone().toNonIndexed(); s.translate(i-(w-1)/2,HH,j-(d-1)/2); parts.push(s);}
+  parts.forEach(p=>{for(const n in p.attributes) if(!['position','normal','uv'].includes(n)) p.deleteAttribute(n);});
+  const g=mergeGeometries(parts); g.computeBoundingSphere(); return geoCache[k]=g;
+}
+function jellyMaterial(col,u){
+  const c=new THREE.Color(col);
+  const m=new THREE.MeshPhysicalMaterial({color:c.clone().lerp(new THREE.Color('#fff'),0.15),transmission:0.92,thickness:1.4,
+    attenuationColor:c,attenuationDistance:0.55,roughness:0.12,ior:1.38,clearcoat:1,clearcoatRoughness:0.06,
+    specularIntensity:1,envMapIntensity:1.2});
+  m.onBeforeCompile=sh=>{
+    Object.assign(sh.uniforms,u);
+    sh.vertexShader=sh.vertexShader.replace('#include <common>',`#include <common>
+uniform float uSquash,uStretch,uHH,uExt; uniform vec2 uShear; uniform vec3 uDir;
+vec3 jelly(vec3 p){
+  float h=clamp((p.y+uHH)/(2.0*uHH),0.0,1.3);
+  p.y=(p.y+uHH)*(1.0-uSquash)-uHH;
+  p.xz*=1.0+uSquash*0.55*(0.6+0.4*sin(h*3.14159));
+  p.xz+=uShear*h*2.0*uHH;
+  float t=dot(p,uDir);
+  float f=smoothstep(-uExt,uExt,t);
+  p+=uDir*uStretch*f*1.6;
+  p-=(p-uDir*t)*uStretch*0.22*f;
+  return p;}`).replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed=jelly(transformed);');
+  };
+  m.customProgramCacheKey=()=>'jelly';
+  return m;
+}
+
+// ---------- physics ----------
+const world=new CANNON.World({gravity:new CANNON.Vec3(0,-22,0)});
+world.broadphase=new CANNON.SAPBroadphase(world); world.allowSleep=true; world.solver.iterations=14;
+const pm=new CANNON.Material('brick'), gm=new CANNON.Material('ground');
+world.defaultContactMaterial.friction=0.6; world.defaultContactMaterial.restitution=0.2;
+world.addContactMaterial(new CANNON.ContactMaterial(pm,pm,{friction:0.95,restitution:0.03,contactEquationStiffness:1e8,contactEquationRelaxation:3}));
+world.addContactMaterial(new CANNON.ContactMaterial(pm,gm,{friction:0.7,restitution:0.25}));
+const ground=new CANNON.Body({mass:0,shape:new CANNON.Plane(),material:gm}); ground.quaternion.setFromEuler(-Math.PI/2,0,0); world.addBody(ground);
+[[0,0,-14,0],[0,0,14,Math.PI],[-14,0,0,Math.PI/2],[14,0,0,-Math.PI/2]].forEach(([x,y,z,r])=>{
+  const w=new CANNON.Body({mass:0,shape:new CANNON.Plane()}); w.position.set(x,y,z); w.quaternion.setFromEuler(0,r,0); world.addBody(w);});
+
+const bricks=[]; const meshes=[]; let joints=[];
+function glue(a,b){const c=new CANNON.LockConstraint(a.body,b.body,{maxForce:400});world.addConstraint(c);joints.push({a,b,c});}
+function unglue(pred){joints=joints.filter(j=>{if(pred(j)){world.removeConstraint(j.c);return false;}return true;});}
+let held=null;
+function addBrick(w,d,ci,pos,quat,angv){
+  const u={uSquash:{value:0},uStretch:{value:0},uHH:{value:HH},uExt:{value:Math.max(w,d)/2},uShear:{value:new THREE.Vector2()},uDir:{value:new THREE.Vector3(0,1,0)}};
+  const mesh=new THREE.Mesh(brickGeo(w,d),jellyMaterial(COLORS[ci],u)); mesh.castShadow=true; scene.add(mesh);
+  const glow=new THREE.Mesh(glowGeo,new THREE.MeshBasicMaterial({map:glowTex,color:COLORS[ci],transparent:true,opacity:.5,depthWrite:false}));
+  glow.scale.set(w+2.6,1,d+2.6); glow.position.y=0.01; glow.renderOrder=-1; scene.add(glow);
+  const body=new CANNON.Body({mass:w*d*0.5,shape:new CANNON.Box(new CANNON.Vec3(w/2,HH,d/2)),material:pm,linearDamping:0.08,angularDamping:0.18,sleepSpeedLimit:0.25,sleepTimeLimit:0.4});
+  body.position.copy(pos); if(quat)body.quaternion.copy(quat); if(angv)body.angularVelocity.copy(angv);
+  world.addBody(body);
+  const b={w,d,ci,mesh,glow,body,u,sq:0,sqV:0,sh:new THREE.Vector2(),shV:new THREE.Vector2(),st:0,stV:0,stT:0,
+    dir:new THREE.Vector3(0,1,0),off:new THREE.Vector3(),depth:0,sup:null};
+  body.addEventListener('collide',e=>{
+    if(b===held)return; const v=Math.abs(e.contact.getImpactVelocityAlongNormal());
+    if(v>1.2){b.sqV+=Math.min(v,12)*0.55; b.shV.x-=body.velocity.x*0.08; b.shV.y-=body.velocity.z*0.08;}
+  });
+  mesh.userData.b=b; bricks.push(b); meshes.push(mesh);
+  if(bricks.length>46){const o=bricks.find(x=>x!==held&&x!==bricks[0]); removeBrick(o);}
+  return b;
+}
+function removeBrick(b){unglue(j=>j.a===b||j.b===b);scene.remove(b.mesh,b.glow);world.removeBody(b.body);bricks.splice(bricks.indexOf(b),1);meshes.splice(meshes.indexOf(b.mesh),1);b.mesh.material.dispose();b.glow.material.dispose();}
+
+// start scene
+addBrick(4,2,0,new CANNON.Vec3(0,HH,0));
+for(let i=0;i<9;i++){
+  const a=i/9*Math.PI*2+0.3, r=4.6+Math.random()*2.4, s=SIZES[i%4];
+  const q=new CANNON.Quaternion().setFromEuler(0,Math.random()*Math.PI,0);
+  addBrick(s[0],s[1],(i+1)%5,new CANNON.Vec3(Math.cos(a)*r,HH,Math.sin(a)*r),q);
+}
+
+// ---------- helpers ----------
+const tq=new THREE.Quaternion(), te=new THREE.Euler();
+function yawOf(q){tq.set(q.x,q.y,q.z,q.w);te.setFromQuaternion(tq,'YXZ');return te.y;}
+function level(q){tq.set(q.x,q.y,q.z,q.w);return new THREE.Vector3(0,1,0).applyQuaternion(tq).y>0.95;}
+function halfExt(b){const y=yawOf(b.body.quaternion);const s=Math.abs(Math.sin(y))>0.7;return s?[b.d/2,b.w/2]:[b.w/2,b.d/2];}
+function overlap(a,b,m){const ea=halfExt(a),eb=halfExt(b);const p=a.body.position,q=b.body.position;
+  return Math.abs(p.x-q.x)<ea[0]+eb[0]-m && Math.abs(p.z-q.z)<ea[1]+eb[1]-m;}
+function trySnap(b){
+  let best=null; const bp=b.body.position, mb=Math.max(b.w,b.d)/2*0.6+0.9;
+  for(const a of bricks){ if(a===b||!level(a.body.quaternion))continue;
+    const e=halfExt(a), ap=a.body.position;
+    const ox=Math.max(0,Math.abs(bp.x-ap.x)-e[0]), oz=Math.max(0,Math.abs(bp.z-ap.z)-e[1]);
+    if(ap.y<bp.y-0.2&&Math.hypot(ox,oz)<mb&&(!best||ap.y>best.body.position.y))best=a;}
+  if(!best)return false;
+  const ya=yawOf(best.body.quaternion), yb=yawOf(b.body.quaternion);
+  const k=Math.round((yb-ya)/(Math.PI/2)), yaw=ya+k*Math.PI/2;
+  const bw=(k%2)?b.d:b.w, bd=(k%2)?b.w:b.d;
+  const dx=b.body.position.x-best.body.position.x, dz=b.body.position.z-best.body.position.z;
+  const c=Math.cos(ya), s=Math.sin(ya);
+  let rx=c*dx-s*dz, rz=s*dx+c*dz;
+  const sn=(r,pa)=>pa?Math.round(r-0.5)+0.5:Math.round(r);
+  const lim=(A,B)=>(A+B)/2-1;
+  rx=THREE.MathUtils.clamp(sn(rx,(best.w-bw)%2!==0),-lim(best.w,bw),lim(best.w,bw));
+  rz=THREE.MathUtils.clamp(sn(rz,(best.d-bd)%2!==0),-lim(best.d,bd),lim(best.d,bd));
+  b.body.position.set(best.body.position.x+c*rx+s*rz,best.body.position.y+H+0.002,best.body.position.z-s*rx+c*rz);
+  b.body.quaternion.setFromEuler(0,yaw,0);
+  b.body.velocity.set(0,0,0); b.body.angularVelocity.set(0,0,0); b.settle=0.8; best.settle=Math.max(best.settle||0,0.4); glue(best,b);
+  b.body.quaternion.normalize(); b.sqV+=4.5; best.sqV+=2.5; best.shV.x+=(Math.random()-.5)*1.5; best.shV.y+=(Math.random()-.5)*1.5;
+  return true;
+}
+
+// ---------- input ----------
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2(), cur=document.getElementById('cur');
+let grab=null;
+function planeHit(y){ray.setFromCamera(mouse,camera);const p=new THREE.Vector3();
+  return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-y),p)?p:null;}
+addEventListener('pointermove',e=>{cur.style.transform=`translate(${e.clientX}px,${e.clientY}px)`+(held?' scale(.45)':'');
+  mouse.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);});
+renderer.domElement.addEventListener('pointerdown',e=>{
+  mouse.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);
+  ray.setFromCamera(mouse,camera); const hit=ray.intersectObjects(meshes,false)[0]; if(!hit)return;
+  const b=hit.object.userData.b; held=b; cur.classList.add('hold');
+  bricks.forEach(x=>x.body.wakeUp());
+  b.body.type=CANNON.Body.KINEMATIC; b.body.velocity.set(0,0,0); b.body.angularVelocity.set(0,0,0);
+  const p=b.body.position;
+  grab={b,phase:'pull',t:0,anchor:hit.point.clone(),off:new THREE.Vector3(hit.point.x-p.x,0,hit.point.z-p.z),
+    yaw:yawOf(b.body.quaternion),holdY:p.y,vel:new THREE.Vector3(),pos:new THREE.Vector3(p.x,p.y,p.z)};
+});
+addEventListener('pointerup',()=>{
+  if(!grab)return; const b=grab.b;
+  b.body.collisionResponse=true; b.body.type=CANNON.Body.DYNAMIC; b.body.mass=b.w*b.d*0.5; b.body.updateMassProperties(); b.body.wakeUp();
+  b.stT=0; held=null; cur.classList.remove('hold');
+  if(grab.phase==='lift'&&trySnap(b)){} else {
+    const v=grab.vel.clampLength(0,8); b.body.velocity.set(v.x,Math.min(v.y,3),v.z);}
+  grab=null;
+});
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();shake();}});
+function shake(){const a=Math.random()*Math.PI*2;for(const b of bricks){if(b===held)continue;
+  const f=b.depth>0?2.2+b.depth*0.9:1.2; b.shV.x+=Math.cos(a)*f; b.shV.y+=Math.sin(a)*f; b.sqV+=1.2;}}
+
+// UI
+const swd=document.getElementById('sw');
+COLORS.forEach((c,i)=>{const bt=document.createElement('button');bt.style.background=c;if(!i)bt.className='on';
+  bt.onclick=()=>{flavor=i;[...swd.children].forEach((x,j)=>x.className=j===i?'on':'');};swd.appendChild(bt);});
+document.getElementById('wob').oninput=e=>wobble=+e.target.value;
+document.getElementById('pour').onclick=()=>{
+  for(let i=0;i<5;i++){const s=SIZES[Math.floor(Math.random()*4)];
+    const q=new CANNON.Quaternion().setFromEuler(Math.random()*6,Math.random()*6,Math.random()*6);
+    const av=new CANNON.Vec3((Math.random()-.5)*8,(Math.random()-.5)*8,(Math.random()-.5)*8);
+    addBrick(s[0],s[1],flavor,new CANNON.Vec3((Math.random()-.5)*7,9+i*1.6,(Math.random()-.5)*7),q,av);}
+};
+const shEl=document.getElementById('sh'), bcEl=document.getElementById('bc');
+
+// ---------- loop ----------
+const clock=new THREE.Clock(); let T=0;
+const qi=new THREE.Quaternion(), v3=new THREE.Vector3();
+function updateHeld(dt){
+  const g=grab,b=g.b; g.t+=dt;
+  if(g.phase==='pull'){
+    const p=planeHit(g.anchor.y); if(!p)return;
+    const pull=p.sub(g.anchor); pull.y+=0.25; const L=pull.length();
+    b.dir.copy(pull.normalize()); b.stT=Math.min(L*0.2,0.5);
+    if(L>1.0||(g.t>0.3&&L>0.35)){g.phase='lift'; b.body.collisionResponse=false; bricks.forEach(x=>{x.settle=0;x.body.wakeUp();});
+      { const up=new Set([b]); let ch=true; while(ch){ch=false;for(const j of joints)if(up.has(j.a)&&!up.has(j.b)){up.add(j.b);ch=true;}}
+        unglue(j=>up.has(j.a)||j.b===b); }
+      for(const c of bricks){ if(c!==b&&c.body.position.y>b.body.position.y+0.4&&Math.hypot(c.body.position.x-b.body.position.x,c.body.position.z-b.body.position.z)<3.5){
+        c.body.velocity.x+=(Math.random()-.5)*1.6;c.body.velocity.z+=(Math.random()-.5)*1.6;c.body.velocity.y+=1;
+        c.body.angularVelocity.set((Math.random()-.5)*3,(Math.random()-.5)*2,(Math.random()-.5)*3);}}}
+    return;
+  }
+  const p=planeHit(g.holdY); if(!p)return;
+  const tx=p.x-g.off.x, tz=p.z-g.off.z;
+  let top=0; const he=[b.w/2,b.d/2];
+  for(const c of bricks){if(c===b)continue;const e=halfExt(c);
+    if(Math.abs(c.body.position.x-tx)<e[0]+he[0]&&Math.abs(c.body.position.z-tz)<e[1]+he[1])top=Math.max(top,c.body.position.y+HH+0.25);}
+  const ty=top+HH+0.9; g.holdY=ty>g.holdY?ty:g.holdY+(ty-g.holdY)*(1-Math.exp(-8*dt));
+  const target=new THREE.Vector3(tx,g.holdY,tz), prev=g.pos.clone();
+  g.pos.lerp(target,1-Math.exp(-11*dt)); g.pos.y=Math.max(g.pos.y,top+HH+0.15);
+  g.vel.copy(g.pos).sub(prev).divideScalar(Math.max(dt,1e-3));
+  b.body.position.set(g.pos.x,g.pos.y,g.pos.z); b.body.velocity.set(g.vel.x,g.vel.y,g.vel.z);
+  const hv=new THREE.Vector3(g.vel.x,0,g.vel.z); const sp=hv.length();
+  const tilt=new THREE.Quaternion(); if(sp>0.01)tilt.setFromAxisAngle(new THREE.Vector3(hv.z,0,-hv.x).normalize(),Math.min(sp*0.035,0.38));
+  tilt.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0,g.yaw,0)));
+  b.body.quaternion.set(tilt.x,tilt.y,tilt.z,tilt.w);
+  const lag=target.clone().sub(g.pos); const ll=lag.length();
+  if(ll>0.02)b.dir.copy(lag.normalize()); b.stT=Math.min(ll*0.18,0.35);
+}
+function springs(b,dt){
+  const k=300-230*wobble, c=2*Math.sqrt(k)*(0.3-0.22*wobble);
+  b.sqV+=(-k*b.sq-c*b.sqV)*dt; b.sq+=b.sqV*dt; b.sq=THREE.MathUtils.clamp(b.sq,-0.3,0.5);
+  b.shV.x+=(-k*b.sh.x-c*b.shV.x)*dt; b.shV.y+=(-k*b.sh.y-c*b.shV.y)*dt;
+  if(b.sup){b.shV.x+=(b.sup.sh.x-b.sh.x)*k*0.25*dt; b.shV.y+=(b.sup.sh.y-b.sh.y)*k*0.25*dt;}
+  b.sh.x+=b.shV.x*dt; b.sh.y+=b.shV.y*dt; b.sh.clampLength(0,0.35);
+  const ks=k*0.8; b.stV+=(-ks*(b.st-b.stT)-c*0.8*b.stV)*dt; b.st+=b.stV*dt; b.st=THREE.MathUtils.clamp(b.st,-0.2,0.6);
+}
+let frame=0;
+function loop(){
+  const dt=Math.min(clock.getDelta(),1/30); T+=dt;
+  if(grab)updateHeld(dt);
+  for(const b of bricks){ if(b.settle>0&&b!==held){ b.settle-=dt; const v=b.body.velocity;
+    v.x*=0.2; v.z*=0.2; if(v.y>0)v.y=0; b.body.angularVelocity.scale(0.2,b.body.angularVelocity);
+    if(b.settle<=0&&v.length()<0.5)b.body.sleep(); } }
+  world.step(1/60,dt,3);
+  // support graph
+  const order=[...bricks].sort((a,b)=>a.body.position.y-b.body.position.y);
+  let maxDepth=0;
+  for(const b of order){
+    b.sup=null; b.depth=0;
+    if(b!==held){ for(const a of order){ if(a===b||a===held)continue; const dy=b.body.position.y-a.body.position.y;
+      if(Math.abs(dy-H)<0.2&&overlap(a,b,0.2)){b.sup=a;break;} } }
+    b.depth=b.sup?b.sup.depth+1:(b!==held&&b.body.position.y<HH+0.2&&level(b.body.quaternion)?1:0);
+    if(b.depth>0&&(b.depth>1||b===bricks[0]||order.some(x=>x.sup===b)))maxDepth=Math.max(maxDepth,b.depth);
+    const sub=4; for(let i=0;i<sub;i++)springs(b,dt/sub);
+    b.off.set(0,0,0); if(b.sup){b.off.copy(b.sup.off); b.off.x+=b.sup.sh.x*H; b.off.z+=b.sup.sh.y*H; b.off.y-=b.sup.sq*H;}
+    const p=b.body.position,q=b.body.quaternion;
+    b.mesh.position.set(p.x+b.off.x,p.y+b.off.y,p.z+b.off.z); b.mesh.quaternion.set(q.x,q.y,q.z,q.w);
+    qi.copy(b.mesh.quaternion).invert();
+    v3.set(b.sh.x,0,b.sh.y).applyQuaternion(qi); b.u.uShear.value.set(v3.x,v3.z);
+    b.u.uSquash.value=b.sq; b.u.uStretch.value=Math.max(b.st,0);
+    b.u.uDir.value.copy(b.dir).applyQuaternion(qi).normalize();
+    b.glow.position.set(b.mesh.position.x,0.01,b.mesh.position.z); b.glow.rotation.y=yawOf(q);
+    b.glow.material.opacity=0.42*THREE.MathUtils.clamp(1-(p.y-HH)/7,0,1);
+  }
+  if(frame++%10===0){shEl.textContent=Math.max(maxDepth,1);bcEl.textContent=bricks.length;}
+  const a=0.7+Math.sin(T*0.08)*0.22;
+  camera.position.set(Math.sin(a)*19,12.5+Math.sin(T*0.13)*0.6,Math.cos(a)*19);
+  camera.lookAt(0,1.6,0);
+  renderer.render(scene,camera);
+  requestAnimationFrame(loop);
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+window.__jb={bricks,camera,get grab(){return grab}};
+loop();
+</script></body></html>

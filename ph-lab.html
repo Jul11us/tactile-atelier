@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>pH Lab</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:"Helvetica Neue",Arial,sans-serif;color:#111;cursor:none;user-select:none}
+canvas{display:block}
+#title{position:fixed;top:34px;left:40px;pointer-events:none}
+#title .lab{font-variant:small-caps;letter-spacing:.18em;font-size:13px;text-transform:lowercase;color:#555}
+#title h1{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:400;font-size:64px;line-height:.95;margin:10px 0 12px}
+#title h1 span{color:#e8336b}
+#title p{margin:0;font-size:14px;color:#666}
+#panel{position:fixed;right:32px;top:50%;transform:translateY(-50%);width:220px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid #eee;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:20px;font-size:12px}
+#panel h4{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#888;font-weight:500}
+.sw{display:flex;gap:9px;margin-bottom:20px;flex-wrap:wrap}
+.sw button{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:none;padding:0}
+.sw button.on{box-shadow:0 0 0 2px #111}
+.seg{display:flex;gap:6px;margin-bottom:18px}.seg button{flex:1;border:1px solid #ddd;background:#fff;border-radius:999px;padding:6px 0;font-size:11px;cursor:none}.seg button.on{background:#111;color:#fff;border-color:#111}
+input[type=range]{width:100%;accent-color:#111;margin:0 0 18px;cursor:none}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #eee;padding:9px 0}
+.row b{font-family:Georgia,serif;font-style:italic;font-size:22px;font-weight:400}
+.act{width:100%;margin-top:12px;background:#111;color:#fff;border:0;border-radius:999px;padding:12px;font-size:13px;letter-spacing:.04em;cursor:none}
+.act:hover{background:#333}
+#hint{position:fixed;left:40px;bottom:30px;font-size:12px;letter-spacing:.08em;color:#777;pointer-events:none}
+#cur{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1.5px solid #111;background:rgba(17,17,17,.06);pointer-events:none;transition:width .15s,height .15s,margin .15s,background .15s;z-index:9}
+#cur.hold{width:12px;height:12px;margin:-6px 0 0 -6px;background:#111}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<div id="title"><div class="lab">Nº 20 / Acidic Goods</div><h1>pH /<br><span>Lab.</span></h1><p>Drip strong acid or base into 100 mL of water and watch the indicator turn.</p></div>
+<div id="panel"><h4>Indicator · <span id="indn" style="letter-spacing:0;text-transform:none;color:#111">Universal</span></h4><div class="sw" id="sw"></div>
+<div class="seg" id="seg"><button data-k="acid" class="on">Acid · HCl</button><button data-k="base">Base · NaOH</button></div>
+<h4>Drop concentration · <span id="concv" style="letter-spacing:0;text-transform:none;color:#111"></span></h4><input id="conc" type="range" min="-3" max="0" step="0.01" value="-1">
+<canvas id="chart" width="360" height="110" style="width:100%;height:55px;display:block;margin:-6px 0 6px"></canvas>
+<div class="row"><span>pH</span><b id="ph">7.00</b></div>
+<div class="row"><span>Drops acid / base</span><b id="dr">0 / 0</b></div>
+<div class="row"><span>Volume</span><b id="vol">100.00 mL</b></div>
+<button class="act" id="fresh">Fresh water</button></div>
+<div id="hint">Click to drip · Hold to keep dripping · A / B to switch acid and base</div>
+<div id="cur"></div>
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+const cur=document.getElementById('cur');
+addEventListener('pointermove',e=>{cur.style.transform=`translate(${e.clientX}px,${e.clientY}px)`;});
+function swatches(id,cols,cb){const el=document.getElementById(id);cols.forEach((c,i)=>{const b=document.createElement('button');b.style.background=c;if(!i)b.className='on';b.onclick=()=>{[...el.children].forEach((x,j)=>x.className=j===i?'on':'');cb(i);};el.appendChild(b);});}
+
+
+// ---- chemistry (strong acid HCl / strong base NaOH, 25 °C) ----
+const KW=1e-14, DROP=5e-5; // L per drop (0.05 mL)
+const chem={V:0.1,n:0,acid:0,base:0}; // n = mol H+ minus mol OH- added
+function pH(){const x=chem.n/chem.V;const h=(x+Math.sqrt(x*x+4*KW))/2;return -Math.log10(h);}
+function addDrop(kind,C){chem.n+=(kind==='acid'?1:-1)*C*DROP;chem.V+=DROP;chem[kind]++;}
+function reset(){chem.V=0.1;chem.n=0;chem.acid=0;chem.base=0;}
+// ---- indicators ----
+const lerpStops=(st,x)=>{if(x<=st[0][0])return new THREE.Color(st[0][1]);for(let i=1;i<st.length;i++)if(x<=st[i][0]){const t=(x-st[i-1][0])/(st[i][0]-st[i-1][0]);return new THREE.Color(st[i-1][1]).lerp(new THREE.Color(st[i][1]),t);}return new THREE.Color(st[st.length-1][1]);};
+const CLEAR='#eef6fb';
+const IND=[
+ {name:'Universal',sw:'#30b030',st:[[0,'#d0002a'],[2,'#f0302a'],[3.5,'#ff6a00'],[5,'#ffb000'],[6,'#e8e000'],[7,'#3cb043'],[8,'#00a08a'],[9.5,'#1f6fd0'],[11,'#3a3ab8'],[14,'#5b1a80']]},
+ {name:'Phenolphthalein',sw:'#ff2fa6',st:[[0,CLEAR],[8.2,CLEAR],[9.2,'#ff9ad0'],[10,'#f0168f'],[12,'#e0108a'],[13,'#f2a6cf'],[14,CLEAR]]},
+ {name:'Bromothymol blue',sw:'#2f6fe0',st:[[0,'#f2d22a'],[6.0,'#f2d22a'],[6.8,'#7fbf3a'],[7.6,'#2a6fd6'],[14,'#2a5fd0']]},
+ {name:'Litmus',sw:'#8a3fa8',st:[[0,'#d8233a'],[4.5,'#d8233a'],[6.5,'#8a3fa8'],[8.3,'#3a4fd0'],[14,'#3a4fd0']]}];
+let ind=0, conc=0.1, reagent='acid';
+// ---- scene ----
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5)); renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#fff');
+scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),0.04).texture;
+const camera=new THREE.PerspectiveCamera(34,innerWidth/innerHeight,0.1,100);
+scene.add(new THREE.HemisphereLight(0xffffff,0xeeeeee,0.6));
+const sun=new THREE.DirectionalLight(0xffffff,1.2); sun.position.set(4,12,6); sun.castShadow=true; sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera,{left:-6,right:6,top:6,bottom:-6,near:1,far:30}); sun.shadow.radius=6; scene.add(sun);
+const fl=new THREE.Mesh(new THREE.PlaneGeometry(40,40),new THREE.ShadowMaterial({opacity:0.1})); fl.rotation.x=-Math.PI/2; fl.receiveShadow=true; scene.add(fl);
+const R=1.6, BH=3.6;
+const glass=new THREE.MeshPhysicalMaterial({color:'#ffffff',roughness:0.03,transmission:1,thickness:0.12,ior:1.47,clearcoat:1,envMapIntensity:1.5,side:THREE.DoubleSide});
+const bp=[new THREE.Vector2(0,0),new THREE.Vector2(R-0.1,0),new THREE.Vector2(R,0.1),new THREE.Vector2(R,BH),new THREE.Vector2(R+0.12,BH+0.06),new THREE.Vector2(R+0.04,BH+0.1),new THREE.Vector2(R-0.06,BH),new THREE.Vector2(R-0.06,0.14),new THREE.Vector2(0,0.1)];
+const beaker=new THREE.Mesh(new THREE.LatheGeometry(bp,64),glass); beaker.castShadow=true; scene.add(beaker);
+// graduation marks
+const markM=new THREE.MeshBasicMaterial({color:'#9aa'});for(let i=1;i<=6;i++){const m=new THREE.Mesh(new THREE.BoxGeometry(i%2?0.35:0.2,0.015,0.01),markM);const a=0.6;m.position.set(Math.sin(a)*(R+0.005)-0.0,0.5*i,Math.cos(a)*(R+0.005));m.rotation.y=a;scene.add(m);}
+// liquid with swirl shader
+const U={uOld:{value:new THREE.Color(CLEAR)},uNew:{value:new THREE.Color(CLEAR)},uMix:{value:1},uT:{value:0},uDrop:{value:new THREE.Vector2()}};
+const liqMat=new THREE.MeshPhysicalMaterial({color:'#ffffff',roughness:0.15,clearcoat:0.8});
+liqMat.onBeforeCompile=s=>{Object.assign(s.uniforms,U);
+  s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vP;').replace('#include <begin_vertex>','#include <begin_vertex>\nvP=position;');
+  s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nuniform vec3 uOld,uNew;uniform float uMix,uT;uniform vec2 uDrop;varying vec3 vP;')
+   .replace('vec4 diffuseColor = vec4( diffuse, opacity );',`float ang=atan(vP.z,vP.x);float rad=length(vP.xz);
+     float sw=sin(ang*3.0+rad*4.0-uT*5.0+vP.y*2.0)*0.5+0.5; float dd=length(vP.xz-uDrop);
+     float m=clamp(uMix*1.6-0.35+ (sw-0.5)*0.6*(1.0-uMix) - dd*0.25*(1.0-uMix),0.0,1.0);
+     vec4 diffuseColor=vec4(mix(uOld,uNew,m),opacity);`);};
+let liqH=1.6;
+const liquid=new THREE.Mesh(new THREE.CylinderGeometry(R-0.08,R-0.08,1,64,4).translate(0,0.5,0),liqMat); liquid.position.y=0.13; scene.add(liquid);
+// dropper
+const dropper=new THREE.Group();const tube=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.06,1.6,24),glass);dropper.add(tube);
+const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.22,24,16),new THREE.MeshPhysicalMaterial({color:'#e33',roughness:0.4,clearcoat:0.5}));bulb.position.y=0.95;bulb.scale.y=1.3;dropper.add(bulb);
+const tip=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.025,0.4,16),glass);tip.position.y=-0.98;dropper.add(tip);
+dropper.position.set(0,BH+1.7,0); scene.add(dropper);
+const drops=[], rings=[];
+const dGeo=new THREE.SphereGeometry(0.07,14,10), ringGeo=new THREE.RingGeometry(0.9,1,40).rotateX(-Math.PI/2);
+function release(kind){const m=new THREE.Mesh(dGeo,new THREE.MeshPhysicalMaterial({color:kind==='acid'?'#ffe8e8':'#e8eeff',transmission:0.8,roughness:0,thickness:0.1}));
+  m.scale.y=1.3;m.position.set(dropper.position.x,dropper.position.y-1.2,dropper.position.z);scene.add(m);drops.push({m,v:0,kind,C:conc});}
+// chart
+const cv=document.getElementById('chart'),cx=cv.getContext('2d'); const hist=[pH()];
+function drawChart(){const w=cv.width,h=cv.height;cx.clearRect(0,0,w,h);cx.strokeStyle='#eee';cx.lineWidth=1;
+  for(const p of [0,7,14]){const y=h-p/14*h;cx.beginPath();cx.moveTo(0,y);cx.lineTo(w,y);cx.stroke();}
+  cx.fillStyle='#aaa';cx.font='9px Helvetica';cx.fillText('pH 7',3,h/2-3);
+  const n=Math.max(20,hist.length-1);cx.lineWidth=1.6;
+  for(let i=1;i<hist.length;i++){const x0=(i-1)/n*w,x1=i/n*w;cx.strokeStyle='#'+lerpStops(IND[0].st,hist[i]).getHexString();cx.beginPath();cx.moveTo(x0,h-hist[i-1]/14*h);cx.lineTo(x1,h-hist[i]/14*h);cx.stroke();}}
+drawChart();
+// UI
+let targetCol=lerpStops(IND[ind].st,pH());
+function recolor(at){U.uOld.value.copy(currentCol());U.uNew.value.copy(lerpStops(IND[ind].st,pH()));U.uMix.value=0;if(at)U.uDrop.value.copy(at);}
+function currentCol(){return U.uOld.value.clone().lerp(U.uNew.value,Math.min(1,U.uMix.value));}
+swatches('sw',IND.map(i=>i.sw),i=>{ind=i;document.getElementById('indn').textContent=IND[i].name;recolor(new THREE.Vector2());});
+const seg=document.getElementById('seg');[...seg.children].forEach(b=>b.onclick=()=>{reagent=b.dataset.k;[...seg.children].forEach(x=>x.className=x===b?'on':'');bulb.material.color.set(reagent==='acid'?'#e33':'#36f');});
+const cEl=document.getElementById('conc'),cLab=document.getElementById('concv');
+cEl.oninput=()=>{conc=Math.pow(10,+cEl.value);cLab.textContent=conc.toPrecision(2)+' M';};cEl.oninput();
+document.getElementById('fresh').onclick=()=>{reset();hist.length=0;hist.push(pH());drawChart();recolor(new THREE.Vector2());};
+addEventListener('keydown',e=>{if(e.key==='a'||e.key==='A')seg.children[0].click();if(e.key==='b'||e.key==='B')seg.children[1].click();});
+// input
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2(); let holdT=-1;
+addEventListener('pointermove',e=>mouse.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1));
+renderer.domElement.addEventListener('pointerdown',()=>{release(reagent);holdT=0;cur.classList.add('hold');});
+addEventListener('pointerup',()=>{holdT=-1;cur.classList.remove('hold');});
+const phEl=document.getElementById('ph'),drEl=document.getElementById('dr'),vEl=document.getElementById('vol');
+const clock=new THREE.Clock(); let T=0, frame=0;
+function loop(){
+  const dt=Math.min(clock.getDelta(),1/30); T+=dt; U.uT.value=T;
+  if(holdT>=0){holdT+=dt;if(holdT>0.35){holdT=0.2;release(reagent);}}
+  // dropper follows cursor over beaker mouth
+  ray.setFromCamera(mouse,camera);const p=new THREE.Vector3();if(ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-(BH+1.7)),p)){const r=Math.hypot(p.x,p.z),m=R-0.45;if(r>m){p.x*=m/r;p.z*=m/r;}
+    dropper.position.x+=(p.x-dropper.position.x)*Math.min(1,8*dt);dropper.position.z+=(p.z-dropper.position.z)*Math.min(1,8*dt);}
+  bulb.scale.set(1,1.3-(holdT>=0?0.25:0),1);
+  const surf=0.13+liqH;
+  for(let i=drops.length-1;i>=0;i--){const d=drops[i];d.v-=9.8*dt;d.m.position.y+=d.v*dt;
+    if(d.m.position.y<surf){addDrop(d.kind,d.C);hist.push(pH());if(hist.length>400)hist.shift();drawChart();recolor(new THREE.Vector2(d.m.position.x,d.m.position.z));
+      const rm=new THREE.Mesh(ringGeo,new THREE.MeshBasicMaterial({color:'#fff',transparent:true,opacity:0.7,depthWrite:false}));rm.position.set(d.m.position.x,surf+0.005,d.m.position.z);scene.add(rm);rings.push({m:rm,t:0});
+      scene.remove(d.m);drops.splice(i,1);}}
+  for(let i=rings.length-1;i>=0;i--){const r=rings[i];r.t+=dt;const s=0.05+r.t*0.9;r.m.scale.setScalar(s);r.m.material.opacity=0.7*(1-r.t/0.8);if(r.t>0.8){scene.remove(r.m);rings.splice(i,1);}}
+  U.uMix.value=Math.min(1.2,U.uMix.value+dt*0.7);
+  liqH=1.6*chem.V/0.1; liquid.scale.y=liqH;
+  if(frame++%6===0){const v=pH();phEl.textContent=v.toFixed(2);drEl.textContent=chem.acid+' / '+chem.base;vEl.textContent=(chem.V*1000).toFixed(2)+' mL';}
+  const a=Math.sin(T*0.07)*0.25;
+  camera.position.set(Math.sin(a)*14,7+Math.sin(T*0.1)*0.3,Math.cos(a)*14); camera.lookAt(1.9,2.6,0);
+  renderer.render(scene,camera); requestAnimationFrame(loop);
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+window.__t={chem,pH,addDrop,reset,IND,lerpStops};
+loop();
+
+</script></body></html>

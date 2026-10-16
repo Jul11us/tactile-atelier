@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Caramel Pudding</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:"Helvetica Neue",Arial,sans-serif;color:#111;cursor:none;user-select:none}
+canvas{display:block}
+#title{position:fixed;top:34px;left:40px;pointer-events:none}
+#title .lab{font-variant:small-caps;letter-spacing:.18em;font-size:13px;text-transform:lowercase;color:#555}
+#title h1{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:400;font-size:64px;line-height:.95;margin:10px 0 12px}
+#title h1 span{color:#e0a032}
+#title p{margin:0;font-size:14px;color:#666}
+#panel{position:fixed;right:32px;top:50%;transform:translateY(-50%);width:220px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid #eee;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:20px;font-size:12px}
+#panel h4{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#888;font-weight:500}
+.sw{display:flex;gap:9px;margin-bottom:20px;flex-wrap:wrap}
+.sw button{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:none;padding:0}
+.sw button.on{box-shadow:0 0 0 2px #111}
+.seg{display:flex;gap:6px;margin-bottom:18px}.seg button{flex:1;border:1px solid #ddd;background:#fff;border-radius:999px;padding:6px 0;font-size:11px;cursor:none}.seg button.on{background:#111;color:#fff;border-color:#111}
+input[type=range]{width:100%;accent-color:#111;margin:0 0 18px;cursor:none}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #eee;padding:9px 0}
+.row b{font-family:Georgia,serif;font-style:italic;font-size:22px;font-weight:400}
+.act{width:100%;margin-top:12px;background:#111;color:#fff;border:0;border-radius:999px;padding:12px;font-size:13px;letter-spacing:.04em;cursor:none}
+.act:hover{background:#333}
+#hint{position:fixed;left:40px;bottom:30px;font-size:12px;letter-spacing:.08em;color:#777;pointer-events:none}
+#cur{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1.5px solid #111;background:rgba(17,17,17,.06);pointer-events:none;transition:width .15s,height .15s,margin .15s,background .15s;z-index:9}
+#cur.hold{width:12px;height:12px;margin:-6px 0 0 -6px;background:#111}</style>
+<script type="importmap">{"imports":{
+"three":"https://unpkg.com/three@0.160.0/build/three.module.js",
+"three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<div id="title"><div class="lab">Nº 22 / Wobbly Goods</div><h1>Caramel /<br><span>Pudding.</span></h1><p>Custard puddings that jiggle, slide and take their time to settle.</p></div>
+<div id="panel"><h4>Flavour</h4><div class="sw" id="sw"></div>
+<h4>Wobble</h4><input id="knob" type="range" min="0" max="1" step="0.01" value="0.5">
+<div class="row"><span>Puddings</span><b id="ca">0</b></div>
+<div class="row"><span>Pokes</span><b id="cb">0</b></div>
+<button class="act" id="act">Serve another</button></div>
+<div id="hint">Poke to jiggle · Drag and let go to slide · Space to shake the table</div>
+<div id="cur"></div>
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+
+// ---------- cursor + swatches ----------
+const cur=document.getElementById('cur');
+addEventListener('pointermove',e=>{cur.style.transform=`translate(${e.clientX}px,${e.clientY}px)`;});
+function swatches(id,cols,cb){const el=document.getElementById(id);cols.forEach((c,i)=>{const b=document.createElement('button');b.style.background=c;if(!i)b.className='on';
+  b.onclick=()=>{[...el.children].forEach((x,j)=>x.className=j===i?'on':'');cb(i);};el.appendChild(b);});}
+
+// ---------- state ----------
+const FLAV=[
+  {sw:'#e0a032',body:'#f6cf74',top:'#b5601c'},   // caramel custard
+  {sw:'#8fb25a',body:'#bfd38a',top:'#6b3a17'},   // matcha + kuromitsu
+  {sw:'#f08aa6',body:'#f9c6d1',top:'#b3123a'},   // strawberry
+  {sw:'#8a5a3c',body:'#a8754f',top:'#2a120a'},   // chocolate
+  {sw:'#a98be0',body:'#cdb8f0',top:'#4b2270'}];  // ube
+const COLORS=FLAV.map(f=>f.sw);
+let color=0, knob=0.5, pokes=0;
+
+// ---------- renderer / scene ----------
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5)); renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.05;
+document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#ffffff');
+const pmrem=new THREE.PMREMGenerator(renderer);
+scene.environment=pmrem.fromScene(new RoomEnvironment(),0.04).texture;
+const camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,0.1,200);
+scene.add(new THREE.HemisphereLight(0xffffff,0xf4ece0,0.7));
+const sun=new THREE.DirectionalLight(0xfff6ea,1.5); sun.position.set(6,14,5); sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024); Object.assign(sun.shadow.camera,{left:-10,right:10,top:10,bottom:-10,near:1,far:40});
+sun.shadow.radius=6; sun.shadow.bias=-0.0008; scene.add(sun);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(80,80),new THREE.ShadowMaterial({opacity:0.13}));
+floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
+
+// ---------- feel tools ----------
+class Spring{constructor(x=0){this.x=x;this.v=0;}
+  step(target,k,z,dt){this.v+=(-k*(this.x-target)-2*Math.sqrt(k)*z*this.v)*dt;this.x+=this.v*dt;return this.x;}
+  kick(dv){this.v+=dv;}}
+const feel=()=>({k:300-230*knob, z:0.3-0.22*knob});
+const softUniforms=()=>({uSquash:{value:0},uStretch:{value:0},uHH:{value:0.5},uExt:{value:0.5},uShear:{value:new THREE.Vector2()},
+  uDir:{value:new THREE.Vector3(0,1,0)},uPoke:{value:new THREE.Vector3(0,1,0)},uPA:{value:0},uWob:{value:0},uT:{value:0}});
+function softMaterial(params,u=softUniforms()){
+  const m=new THREE.MeshPhysicalMaterial(params);
+  m.onBeforeCompile=sh=>{Object.assign(sh.uniforms,u);
+    sh.vertexShader=sh.vertexShader.replace('#include <common>',`#include <common>
+uniform float uSquash,uStretch,uHH,uExt,uPA,uWob,uT; uniform vec2 uShear; uniform vec3 uDir,uPoke;
+vec3 soft(vec3 p,vec3 n){
+  float h=clamp((p.y+uHH)/(2.0*uHH),0.0,1.3);
+  p.y=(p.y+uHH)*(1.0-uSquash)-uHH;
+  p.xz*=1.0+uSquash*0.55*(0.6+0.4*sin(h*3.14159));
+  p.xz+=uShear*h*2.0*uHH;
+  float t=dot(p,uDir), f=smoothstep(-uExt,uExt,t);
+  p+=uDir*uStretch*f*1.6;
+  p-=(p-uDir*t)*uStretch*0.22*f;
+  float pk=smoothstep(0.45,1.0,dot(normalize(p+1e-5),uPoke));
+  p-=n*uPA*pk*0.35*uHH; p+=n*uPA*0.06*(1.0-pk)*uHH;
+  p+=n*sin(p.y*7.0+uT*13.0)*sin(p.x*5.0+uT*9.0)*uWob;
+  return p;}`).replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed=soft(transformed,normal);');};
+  m.customProgramCacheKey=()=>'soft';
+  m.userData.u=u; return m;
+}
+
+// ---------- pudding geometry ----------
+// truncated cone with a rounded top edge; caramel is a thin shell over the top that drips down the sides
+const HH=0.55, RB=1.0, RT=0.78, E=0.016;
+const rSide=y=>RB+(RT-RB)*(y+HH)/(2*HH-0.1);
+const bodyPts=[new THREE.Vector2(0.0001,-HH),new THREE.Vector2(RB-0.05,-HH),new THREE.Vector2(RB,-HH+0.05)];
+for(let i=1;i<=10;i++){const y=-HH+0.05+(2*HH-0.15)*i/10;bodyPts.push(new THREE.Vector2(rSide(y),y));}
+for(let i=1;i<=6;i++){const a=i/6*Math.PI/2;bodyPts.push(new THREE.Vector2(RT-0.1+0.1*Math.cos(a),HH-0.1+0.1*Math.sin(a)));}
+bodyPts.push(new THREE.Vector2(0.0001,HH));
+const bodyGeo=new THREE.LatheGeometry(bodyPts,64);
+const capPts=[];
+for(let i=0;i<=10;i++){const y=HH-0.46+0.36*i/10;capPts.push(new THREE.Vector2(rSide(y)+E,y));}
+for(let i=1;i<=6;i++){const a=i/6*Math.PI/2;capPts.push(new THREE.Vector2(RT-0.1+(0.1+E)*Math.cos(a),HH-0.1+(0.1+E)*Math.sin(a)));}
+capPts.push(new THREE.Vector2(0.0001,HH+E));
+const capGeo=new THREE.LatheGeometry(capPts,96);
+{const cp=capGeo.attributes.position;
+  for(let i=0;i<cp.count;i++){const y=cp.getY(i); if(y>HH-0.1)continue;
+    const th=Math.atan2(cp.getZ(i),cp.getX(i));
+    const w=Math.max(0,Math.sin(th*5+1.3)*0.6+Math.sin(th*3-0.4)*0.4+Math.sin(th*11)*0.15);
+    const drip=0.07+0.29*Math.pow(Math.min(w,1),2.2);
+    const ny=Math.max(y,HH-0.1-drip), r=rSide(ny)+E;
+    cp.setXYZ(i,Math.cos(th)*r,ny,Math.sin(th)*r);}
+  capGeo.computeVertexNormals();}
+
+// ---------- puddings ----------
+const puds=[], pickables=[], MAX=12;
+function addPud(x,z,fi,y=0,S=0.85+Math.random()*0.4){
+  const f=FLAV[fi], u=softUniforms(); u.uHH.value=HH; u.uExt.value=RB;
+  // custard: soft, opaque, a little glow from inside (sheen + faint emissive)
+  const body=new THREE.Mesh(bodyGeo,softMaterial({color:f.body,roughness:0.38,sheen:0.5,sheenColor:new THREE.Color('#fff4dc'),sheenRoughness:0.5,
+    clearcoat:0.55,clearcoatRoughness:0.25,emissive:f.body,emissiveIntensity:0.07},u));
+  // caramel: glossy, translucent, darker where it is thicker
+  const tc=new THREE.Color(f.top);
+  const cap=new THREE.Mesh(capGeo,softMaterial({color:tc.clone().lerp(new THREE.Color('#fff'),0.25),transmission:0.85,thickness:0.6,ior:1.45,
+    attenuationColor:tc,attenuationDistance:0.4,roughness:0.05,clearcoat:1,clearcoatRoughness:0.03,specularIntensity:1,envMapIntensity:1.4},u));
+  body.castShadow=cap.castShadow=true;
+  const g=new THREE.Group(); g.add(body,cap); g.scale.setScalar(S); scene.add(g);
+  const p={g,body,cap,u,S,pos:new THREE.Vector3(x,y,z),vel:new THREE.Vector3(),pv:new THREE.Vector3(),yaw:Math.random()*Math.PI*2,
+    sq:new Spring(),shx:new Spring(),shz:new Spring(),pa:new Spring(),wob:0,sqT:0};
+  body.userData.p=cap.userData.p=p; puds.push(p); pickables.push(body,cap);
+  while(puds.length>MAX){const o=puds.find(q=>!(held&&held.p===q)); removePud(o);}
+  return p;
+}
+function removePud(p){scene.remove(p.g);puds.splice(puds.indexOf(p),1);
+  pickables.splice(pickables.indexOf(p.body),1);pickables.splice(pickables.indexOf(p.cap),1);
+  p.body.material.dispose();p.cap.material.dispose();}
+
+// opening table: six puddings that plop down in turn
+[[-2.4,-0.4,0,1.15],[-0.2,1.7,1,0.95],[0.9,-1.4,2,1.05],[-3.4,2.1,3,0.9],[2.2,0.9,4,0.85],[-1.2,-2.8,0,0.9]]
+  .forEach(([x,z,fi,S],i)=>addPud(x,z,fi,1.2+i*0.55,S));
+
+// ---------- input ----------
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2(); let held=null;
+const ground=new THREE.Plane(new THREE.Vector3(0,1,0),0), tv=new THREE.Vector3(), tmp=new THREE.Vector3();
+function setMouse(e){mouse.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);}
+function hitPlane(plane){ray.setFromCamera(mouse,camera);const v=new THREE.Vector3();return ray.ray.intersectPlane(plane,v)?v:null;}
+function poke(p,pt,amt){
+  tmp.copy(pt); p.body.worldToLocal(tmp); p.u.uPoke.value.copy(tmp).normalize();
+  p.pa.kick(amt); p.sq.kick(amt*0.25); p.wob=Math.min(0.03,Math.max(p.wob,0.005*amt));
+  const dx=p.pos.x-pt.x, dz=p.pos.z-pt.z, L=Math.hypot(dx,dz)||1;   // the top leans away from the finger
+  p.shx.kick(dx/L*amt*0.25); p.shz.kick(dz/L*amt*0.25);
+}
+addEventListener('pointermove',setMouse);
+renderer.domElement.addEventListener('pointerdown',e=>{setMouse(e);ray.setFromCamera(mouse,camera);
+  const h=ray.intersectObjects(pickables,false)[0]; if(!h)return;
+  const p=h.object.userData.p; poke(p,h.point,6); pokes++;
+  const fp=hitPlane(ground)||p.pos.clone();
+  held={p,t:0,drag:false,start:fp.clone(),off:new THREE.Vector3(p.pos.x-fp.x,0,p.pos.z-fp.z),vel:new THREE.Vector3()};
+  cur.classList.add('hold');});
+addEventListener('pointerup',()=>{if(!held)return;const p=held.p;
+  if(held.drag)p.vel.set(held.vel.x,0,held.vel.z).clampLength(0,7);
+  p.sqT=0; held=null; cur.classList.remove('hold');});
+// signature: the whole table gets a nudge, every pudding sways the same way, nothing tips over
+function shake(){const a=Math.random()*Math.PI*2;
+  for(const p of puds){const f=1.6+Math.random()*0.5;p.shx.kick(Math.cos(a)*f);p.shz.kick(Math.sin(a)*f);p.sq.kick(0.8);
+    p.wob=Math.max(p.wob,0.012); p.vel.x+=Math.cos(a)*0.25; p.vel.z+=Math.sin(a)*0.25;}}
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();shake();}});
+
+// ---------- UI ----------
+swatches('sw',COLORS,i=>color=i);
+document.getElementById('knob').oninput=e=>knob=+e.target.value;
+document.getElementById('act').onclick=()=>{const a=Math.random()*Math.PI*2,r=Math.random()*3.2;addPud(Math.cos(a)*r-0.6,Math.sin(a)*r,color,5+Math.random());};
+const caEl=document.getElementById('ca'), cbEl=document.getElementById('cb');
+
+// ---------- loop ----------
+const BOUND=6.2, clock=new THREE.Clock(); let T=0, frame=0, fps=60;
+function loop(){
+  const dt=Math.min(clock.getDelta(),1/30); T+=dt; fps+=(1/Math.max(dt,1e-3)-fps)*0.05;
+  const {k,z}=feel();
+  // drag: slide along the table; a short hold without moving presses the pudding down
+  if(held){const p=held.p; held.t+=dt; const fp=hitPlane(ground);
+    if(fp){ if(!held.drag&&fp.distanceTo(held.start)>0.3)held.drag=true;
+      if(held.drag){tv.set(fp.x+held.off.x,0,fp.z+held.off.z); const r=Math.hypot(tv.x,tv.z); if(r>BOUND)tv.multiplyScalar(BOUND/r);
+        const px=p.pos.x,pz=p.pos.z,s=1-Math.exp(-12*dt);
+        p.pos.x+=(tv.x-px)*s; p.pos.z+=(tv.z-pz)*s;
+        held.vel.lerp(tmp.set((p.pos.x-px)/dt,0,(p.pos.z-pz)/dt),0.5); p.vel.set(0,0,0); p.sqT=0;}
+      else p.sqT=Math.min(0.38,held.t*1.1);}}
+  // motion
+  for(const p of puds){
+    if(held&&held.drag&&held.p===p)continue;
+    if(p.pos.y>0||p.vel.y>0)p.vel.y-=18*dt;
+    p.pos.addScaledVector(p.vel,dt);
+    if(p.pos.y<=0){ if(p.vel.y<-2){p.sq.kick(Math.min(-p.vel.y*0.5,8));p.wob=Math.max(p.wob,0.012);}
+      p.pos.y=0; p.vel.y=0; const fr=Math.exp(-2.6*dt); p.vel.x*=fr; p.vel.z*=fr;}
+    const r=Math.hypot(p.pos.x,p.pos.z);
+    if(r>BOUND){const nx=p.pos.x/r,nz=p.pos.z/r; p.pos.x=nx*BOUND; p.pos.z=nz*BOUND;
+      const vn=p.vel.x*nx+p.vel.z*nz; if(vn>0){p.vel.x-=1.4*vn*nx; p.vel.z-=1.4*vn*nz;}}
+  }
+  // bumps
+  const ev=p=>(held&&held.drag&&held.p===p)?held.vel:p.vel;
+  for(let i=0;i<puds.length;i++)for(let j=i+1;j<puds.length;j++){const a=puds[i],b=puds[j];
+    const dx=b.pos.x-a.pos.x,dz=b.pos.z-a.pos.z,d=Math.hypot(dx,dz),m=(a.S+b.S)*RB*0.96;
+    if(d>=m||Math.abs(a.pos.y-b.pos.y)>1.0)continue;
+    const nx=d>1e-4?dx/d:1,nz=d>1e-4?dz/d:0,o=m-d;
+    const aH=held&&held.drag&&held.p===a, bH=held&&held.drag&&held.p===b;
+    const wa=aH?0:bH?1:0.5;
+    a.pos.x-=nx*o*wa; a.pos.z-=nz*o*wa; b.pos.x+=nx*o*(1-wa); b.pos.z+=nz*o*(1-wa);
+    const va=ev(a),vb=ev(b),rv=(vb.x-va.x)*nx+(vb.z-va.z)*nz;
+    if(rv<-0.2){
+      if(!aH){a.vel.x+=rv*nx*0.85;a.vel.z+=rv*nz*0.85;}
+      if(!bH){b.vel.x-=rv*nx*0.85;b.vel.z-=rv*nz*0.85;}
+      const amt=Math.min(-rv*1.1,5);
+      if(amt>0.6){poke(a,tmp.set(a.pos.x+nx*RB*a.S,a.pos.y+HH*a.S,a.pos.z+nz*RB*a.S),amt);
+        poke(b,tmp.set(b.pos.x-nx*RB*b.S,b.pos.y+HH*b.S,b.pos.z-nz*RB*b.S),amt);}}}
+  // springs + draw
+  for(const p of puds){
+    const v=ev(p); // inertia: when the base speeds up or stops, the top lags behind
+    p.shx.kick(-(v.x-p.pv.x)*0.35); p.shz.kick(-(v.z-p.pv.z)*0.35); p.pv.set(v.x,0,v.z);
+    for(let s=0;s<4;s++){const h=dt/4;
+      p.sq.step(p.sqT,k,z,h); p.shx.step(0,k,z,h); p.shz.step(0,k,z,h); p.pa.step(0,k*1.4,z*0.9,h);}
+    p.sq.x=THREE.MathUtils.clamp(p.sq.x,-0.3,0.5); p.pa.x=THREE.MathUtils.clamp(p.pa.x,-0.6,1.2);
+    const sl=Math.hypot(p.shx.x,p.shz.x); if(sl>0.35){p.shx.x*=0.35/sl;p.shz.x*=0.35/sl;}
+    p.wob*=Math.exp(-2.2*dt);
+    p.g.position.set(p.pos.x,p.pos.y+HH*p.S,p.pos.z); p.g.rotation.y=p.yaw;
+    const c=Math.cos(p.yaw),s=Math.sin(p.yaw);
+    p.u.uShear.value.set(c*p.shx.x-s*p.shz.x,s*p.shx.x+c*p.shz.x);
+    p.u.uSquash.value=p.sq.x; p.u.uPA.value=p.pa.x; p.u.uWob.value=p.wob; p.u.uT.value=T;
+  }
+  if(frame++%10===0){caEl.textContent=puds.length;cbEl.textContent=pokes;}
+  const a=0.6+Math.sin(T*0.08)*0.22;
+  camera.position.set(Math.sin(a)*12.5,7.5+Math.sin(T*0.1)*0.3,Math.cos(a)*12.5); camera.lookAt(1.5,0.4,0);
+  renderer.render(scene,camera); requestAnimationFrame(loop);
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+window.__toy={scene,camera,things:puds,shake,get fps(){return fps},get held(){return held},get pokes(){return pokes}};
+loop();
+</script></body></html>

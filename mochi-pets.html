@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mochi Pets</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:"Helvetica Neue",Arial,sans-serif;color:#111;cursor:none;user-select:none}
+canvas{display:block}
+#title{position:fixed;top:34px;left:40px;pointer-events:none}
+#title .lab{font-variant:small-caps;letter-spacing:.18em;font-size:13px;text-transform:lowercase;color:#555}
+#title h1{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:400;font-size:64px;line-height:.95;margin:10px 0 12px}
+#title h1 span{color:#f08aa6}
+#title p{margin:0;font-size:14px;color:#666}
+#panel{position:fixed;right:32px;top:50%;transform:translateY(-50%);width:220px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid #eee;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:20px;font-size:12px}
+#panel h4{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#888;font-weight:500}
+.sw{display:flex;gap:9px;margin-bottom:20px;flex-wrap:wrap}
+.sw button{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:none;padding:0}
+.sw button.on{box-shadow:0 0 0 2px #111}
+.seg{display:flex;gap:6px;margin-bottom:18px}.seg button{flex:1;border:1px solid #ddd;background:#fff;border-radius:999px;padding:6px 0;font-size:11px;cursor:none}.seg button.on{background:#111;color:#fff;border-color:#111}
+input[type=range]{width:100%;accent-color:#111;margin:0 0 18px;cursor:none}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #eee;padding:9px 0}
+.row b{font-family:Georgia,serif;font-style:italic;font-size:22px;font-weight:400}
+.act{width:100%;margin-top:12px;background:#111;color:#fff;border:0;border-radius:999px;padding:12px;font-size:13px;letter-spacing:.04em;cursor:none}
+.act:hover{background:#333}
+#hint{position:fixed;left:40px;bottom:30px;font-size:12px;letter-spacing:.08em;color:#777;pointer-events:none}
+#cur{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1.5px solid #111;background:rgba(17,17,17,.06);pointer-events:none;transition:width .15s,height .15s,margin .15s,background .15s;z-index:9}
+#cur.hold{width:12px;height:12px;margin:-6px 0 0 -6px;background:#111}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<div id="title"><div class="lab">Nº 13 / Squishy Goods</div><h1>Mochi /<br><span>Pets.</span></h1><p>Little rice-cake creatures that hop, bump and like to be poked.</p></div>
+<div id="panel"><h4>Flavour</h4><div class="sw" id="sw"></div>
+<h4>Squish</h4><input id="sq" type="range" min="0" max="1" step="0.01" value="0.5">
+<div class="row"><span>Pets</span><b id="pc">5</b></div>
+<div class="row"><span>Pokes</span><b id="pk">0</b></div>
+<button class="act" id="adopt">Adopt more</button></div>
+<div id="hint">Poke to jiggle · Hold to squeeze · Drag to stretch</div>
+<div id="cur"></div>
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+const cur=document.getElementById('cur');
+addEventListener('pointermove',e=>{cur.style.transform=`translate(${e.clientX}px,${e.clientY}px)`;});
+function swatches(id,cols,cb){const el=document.getElementById(id);cols.forEach((c,i)=>{const b=document.createElement('button');b.style.background=c;if(!i)b.className='on';b.onclick=()=>{[...el.children].forEach((x,j)=>x.className=j===i?'on':'');cb(i);};el.appendChild(b);});}
+
+
+const FLAV=['#ffc4d0','#cfe8b8','#ffe2a6','#dccbf2','#efe9e1'];
+let flav=0, squish=0.5, pokes=0;
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5)); renderer.setSize(innerWidth,innerHeight);
+document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#fff');
+scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),0.04).texture;
+const camera=new THREE.PerspectiveCamera(34,innerWidth/innerHeight,0.1,100);
+scene.add(new THREE.HemisphereLight(0xffffff,0xf3e9e4,0.9));
+const dl=new THREE.DirectionalLight(0xfff4ee,1.3); dl.position.set(4,9,6); scene.add(dl);
+const sc=document.createElement('canvas');sc.width=sc.height=64;const sx=sc.getContext('2d');const sg=sx.createRadialGradient(32,32,0,32,32,32);
+sg.addColorStop(0,'rgba(90,60,70,.28)');sg.addColorStop(1,'rgba(90,60,70,0)');sx.fillStyle=sg;sx.fillRect(0,0,64,64);
+const shTex=new THREE.CanvasTexture(sc), shGeo=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);
+const bodyGeo=new THREE.SphereGeometry(1,64,40);
+const eyeGeo=new THREE.SphereGeometry(1,16,12), eyeMat=new THREE.MeshPhysicalMaterial({color:'#2a2226',roughness:0.25,clearcoat:1});
+const smileGeo=new THREE.TorusGeometry(1,0.2,8,24,Math.PI), oGeo=new THREE.TorusGeometry(1,0.25,8,24);
+const blushGeo=new THREE.CircleGeometry(1,24), blushMat=new THREE.MeshBasicMaterial({color:'#ff8fa8',transparent:true,opacity:0.45,depthWrite:false});
+const pets=[], bodies=[];
+const BOUND=6.5;
+function onFace(g,R,dir,obj){const d=new THREE.Vector3(...dir).normalize();obj.position.set(d.x*R,0.82*R+d.y*0.82*R,d.z*R);g.add(obj);
+  const n=new THREE.Vector3(d.x/R,d.y/(0.82*R),d.z/R).normalize();obj.lookAt(obj.position.clone().add(n));return obj;}
+function addPet(pos,ci){
+  const R=0.75+Math.random()*0.35;
+  const u={uPoke:{value:new THREE.Vector3(0,0,1)},uPA:{value:0},uT:{value:0},uWob:{value:0}};
+  const mat=new THREE.MeshPhysicalMaterial({color:FLAV[ci],roughness:0.5,sheen:0.5,sheenColor:new THREE.Color('#ffffff'),sheenRoughness:0.45,clearcoat:0.35,clearcoatRoughness:0.5,emissive:FLAV[ci],emissiveIntensity:0.08});
+  mat.onBeforeCompile=s=>{Object.assign(s.uniforms,u);
+    s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nuniform vec3 uPoke;uniform float uPA,uT,uWob;')
+     .replace('#include <begin_vertex>',`#include <begin_vertex>
+      float pk=smoothstep(0.45,1.0,dot(normalize(position),uPoke));
+      transformed-=normal*uPA*pk*0.35;
+      transformed+=normal*uPA*0.06*(1.0-pk);
+      transformed+=normal*sin(position.y*7.0+uT*13.0)*sin(position.x*5.0+uT*9.0)*uWob;`);};
+  mat.customProgramCacheKey=()=>'mochi';
+  const root=new THREE.Group(), sq=new THREE.Group(); root.add(sq); scene.add(root);
+  const body=new THREE.Mesh(bodyGeo,mat); body.scale.set(R,0.82*R,R); body.position.y=0.82*R; sq.add(body);
+  const eyes=[-1,1].map(s=>{const e=onFace(sq,R*1.005,[s*0.33,0.12,0.94],new THREE.Mesh(eyeGeo,eyeMat));e.scale.set(0.075*R,0.095*R,0.04*R);return e;});
+  const smile=onFace(sq,R*1.01,[0,-0.1,1],new THREE.Mesh(smileGeo,eyeMat)); smile.scale.setScalar(0.07*R); smile.rotateZ(Math.PI);
+  const omouth=onFace(sq,R*1.01,[0,-0.12,1],new THREE.Mesh(oGeo,eyeMat)); omouth.scale.setScalar(0.05*R); omouth.visible=false;
+  [-1,1].forEach(s=>{const b=onFace(sq,R*1.012,[s*0.56,-0.05,0.83],new THREE.Mesh(blushGeo,blushMat));b.scale.setScalar(0.1*R);});
+  const sh=new THREE.Mesh(shGeo,new THREE.MeshBasicMaterial({map:shTex,transparent:true,depthWrite:false})); scene.add(sh);
+  const p={root,sq,body,u,eyes,smile,omouth,sh,R,pos:pos.clone(),vel:new THREE.Vector3(),yaw:0,
+    s:0,sV:0,sT:0,st:0,stV:0,pa:0,paV:0,wob:0,hop:1+Math.random()*3,crouch:0,blink:2+Math.random()*3,mood:0,squint:0,eyeS:1};
+  body.userData.p=p; pets.push(p); bodies.push(body); return p;
+}
+for(let i=0;i<5;i++){const a=i/5*Math.PI*2;addPet(new THREE.Vector3(Math.cos(a)*3,0,Math.sin(a)*2.4),i);}
+// input
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2(); let held=null;
+function setMouse(e){mouse.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);}
+addEventListener('pointermove',e=>setMouse(e));
+function poke(p,worldPt,amt){const l=p.body.worldToLocal(worldPt.clone()).normalize();p.u.uPoke.value.copy(l);p.paV+=amt;p.wob=Math.min(0.04,Math.max(p.wob,0.01*amt));p.mood=0.7;}
+function camPlane(pt){const n=new THREE.Vector3();camera.getWorldDirection(n);n.y=0;n.normalize();return new THREE.Plane().setFromNormalAndCoplanarPoint(n,pt);}
+function hitPlane(pl){ray.setFromCamera(mouse,camera);const v=new THREE.Vector3();return ray.ray.intersectPlane(pl,v)?v:null;}
+renderer.domElement.addEventListener('pointerdown',e=>{setMouse(e);ray.setFromCamera(mouse,camera);const h=ray.intersectObjects(bodies,false)[0];if(!h)return;
+  const p=h.object.userData.p; poke(p,h.point,4.5); pokes++;
+  const pl=camPlane(p.pos); const hp=hitPlane(pl);
+  held={p,pl,off:p.pos.clone().sub(hp),start:hp.clone(),t:0,drag:false,last:p.pos.clone(),vel:new THREE.Vector3()}; cur.classList.add('hold');});
+addEventListener('pointerup',()=>{if(!held)return;const p=held.p;p.vel.copy(held.vel).clampLength(0,8);p.sT=0;p.mood=1.2;p.wob=0.025;held=null;cur.classList.remove('hold');});
+swatches('sw',FLAV,i=>flav=i);
+document.getElementById('sq').oninput=e=>squish=+e.target.value;
+document.getElementById('adopt').onclick=()=>{for(let i=0;i<3;i++){const p=addPet(new THREE.Vector3((Math.random()-.5)*8,6+i*1.5,(Math.random()-.5)*5),flav);p.vel.set(0,0,0);}
+  while(pets.length>16){const o=pets.shift();bodies.splice(bodies.indexOf(o.body),1);scene.remove(o.root,o.sh);}};
+const pcEl=document.getElementById('pc'), pkEl=document.getElementById('pk');
+const clock=new THREE.Clock(); let T=0, frame=0; const camAz=new THREE.Vector3();
+function loop(){
+  const dt=Math.min(clock.getDelta(),1/30); T+=dt;
+  const k=320-230*squish, c=2*Math.sqrt(k)*(0.32-0.2*squish);
+  if(held){const p=held.p; held.t+=dt; const hp=hitPlane(held.pl);
+    if(hp){ if(hp.distanceTo(held.start)>0.35)held.drag=true;
+      if(held.drag){const tgt=hp.add(held.off);tgt.y=Math.max(0,tgt.y);const prev=p.pos.clone();p.pos.lerp(tgt,1-Math.exp(-9*dt));
+        held.vel.copy(p.pos).sub(prev).divideScalar(dt);p.vel.set(0,0,0);
+        p.st+=(Math.min(0.55,tgt.distanceTo(p.pos)*0.35+p.pos.y*0.05)-p.st)*Math.min(1,10*dt);p.sT=0;p.omouth.visible=true;p.smile.visible=false;p.squint=0;}
+      else{p.sT=Math.min(0.42,held.t*1.2);p.squint=1;p.omouth.visible=true;p.smile.visible=false;} } }
+  for(const p of pets){
+    const isHeld=held&&held.p===p;
+    if(!isHeld){
+      p.vel.y-=18*dt; p.pos.addScaledVector(p.vel,dt);
+      if(p.pos.y<=0){ if(p.vel.y<-2){p.sV-=Math.min(-p.vel.y*0.55,8);p.wob=Math.max(p.wob,0.015);} p.pos.y=0;p.vel.y=0;p.vel.x*=Math.exp(-6*dt);p.vel.z*=Math.exp(-6*dt);
+        p.hop-=dt; if(p.hop<0.25&&p.hop>0)p.sT=0.22; if(p.hop<=0){p.sT=0;const a=Math.random()*Math.PI*2,tx=p.pos.x+Math.cos(a)*1.5,tz=p.pos.z+Math.sin(a)*1.5;
+          const back=Math.hypot(tx,tz)>BOUND?-1:1;p.vel.set(Math.cos(a)*1.7*back,4.5+Math.random()*2,Math.sin(a)*1.7*back);p.sV+=3;p.hop=1.5+Math.random()*3.5;} }
+      const r=Math.hypot(p.pos.x,p.pos.z); if(r>BOUND){p.pos.x*=BOUND/r;p.pos.z*=BOUND/r;p.vel.x*=-0.5;p.vel.z*=-0.5;}
+      p.st+=(0-p.st)*0; }
+  }
+  for(let i=0;i<pets.length;i++)for(let j=i+1;j<pets.length;j++){const a=pets[i],b=pets[j];
+    const dx=b.pos.x-a.pos.x,dz=b.pos.z-a.pos.z,d=Math.hypot(dx,dz),m=(a.R+b.R)*0.92;
+    if(d<m&&Math.abs(a.pos.y-b.pos.y)<1.3){const nx=d>1e-4?dx/d:1,nz=d>1e-4?dz/d:0,o=(m-d)*0.5;
+      a.pos.x-=nx*o;a.pos.z-=nz*o;b.pos.x+=nx*o;b.pos.z+=nz*o;
+      const rv=(b.vel.x-a.vel.x)*nx+(b.vel.z-a.vel.z)*nz;
+      if(rv<-0.3){a.vel.x+=rv*nx*0.8;a.vel.z+=rv*nz*0.8;b.vel.x-=rv*nx*0.8;b.vel.z-=rv*nz*0.8;
+        const ap=a.root.position.clone().add(new THREE.Vector3(nx,0.8,nz).multiplyScalar(a.R)),bp=b.root.position.clone().add(new THREE.Vector3(-nx,0.8,-nz).multiplyScalar(b.R));
+        poke(a,ap,Math.min(-rv,4));poke(b,bp,Math.min(-rv,4));a.mood=b.mood=0.6;}}}
+  camAz.copy(camera.position);
+  for(const p of pets){
+    p.sV+=(-k*(p.s-p.sT)-c*p.sV)*dt; p.s+=p.sV*dt; p.s=THREE.MathUtils.clamp(p.s,-0.4,0.55);
+    if(!(held&&held.p===p&&held.drag)){p.stV+=(-k*p.st-c*p.stV)*dt;p.st+=p.stV*dt;}
+    p.paV+=(-k*1.4*p.pa-c*0.9*p.paV)*dt; p.pa+=p.paV*dt; p.wob*=Math.exp(-2.2*dt);
+    const sy=Math.max(0.3,(1-p.s)*(1+p.st)), sxz=1/Math.sqrt(sy);
+    p.sq.scale.set(sxz,sy,sxz);
+    const ty=Math.atan2(camAz.x-p.pos.x,camAz.z-p.pos.z)+Math.sin(T*0.6+p.R*20)*0.35; p.yaw+=(ty-p.yaw)*Math.min(1,3*dt);
+    p.root.position.copy(p.pos); p.root.rotation.y=p.yaw;
+    p.u.uPA.value=p.pa; p.u.uT.value=T; p.u.uWob.value=p.wob;
+    // face
+    p.blink-=dt; let eyeT=1; if(p.blink<0){eyeT=0.08;if(p.blink<-0.12)p.blink=2+Math.random()*4;}
+    if(!(held&&held.p===p)){p.mood-=dt; p.squint=p.mood>0.3?1:0; if(p.mood<=0){p.smile.visible=true;p.omouth.visible=false;} else {p.smile.visible=p.pos.y<0.5;p.omouth.visible=!p.smile.visible;}}
+    if(p.squint)eyeT=0.18; if(p.pos.y>0.8&&!p.squint)eyeT=1.25;
+    p.eyeS+=(eyeT-p.eyeS)*Math.min(1,25*dt); for(const e of p.eyes)e.scale.y=0.095*p.R*p.eyeS;
+    p.smile.scale.setScalar(0.07*p.R*(p.mood>0?1.3:1));
+    p.sh.position.set(p.pos.x,0.005,p.pos.z); p.sh.scale.setScalar(p.R*2.6*(1+p.s*0.4)/(1+p.pos.y*0.15)); p.sh.material.opacity=1/(1+p.pos.y*0.35);
+  }
+  if(frame++%10===0){pcEl.textContent=pets.length;pkEl.textContent=pokes;}
+  const a=Math.sin(T*0.07)*0.22;
+  camera.position.set(Math.sin(a)*14,6.5+Math.sin(T*0.1)*0.3,Math.cos(a)*14); camera.lookAt(0.8,0.6,0);
+  renderer.render(scene,camera); requestAnimationFrame(loop);
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+window.__t={pets,camera,get pokes(){return pokes}};
+loop();
+
+</script></body></html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Molecule Kit</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:"Helvetica Neue",Arial,sans-serif;color:#111;cursor:none;user-select:none}
+canvas{display:block}
+#title{position:fixed;top:34px;left:40px;pointer-events:none}
+#title .lab{font-variant:small-caps;letter-spacing:.18em;font-size:13px;text-transform:lowercase;color:#555}
+#title h1{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:400;font-size:64px;line-height:.95;margin:10px 0 12px}
+#title h1 span{color:#ff2a1a}
+#title p{margin:0;font-size:14px;color:#666}
+#panel{position:fixed;right:32px;top:50%;transform:translateY(-50%);width:220px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid #eee;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:20px;font-size:12px}
+#panel h4{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#888;font-weight:500}
+.sw{display:flex;gap:9px;margin-bottom:20px;flex-wrap:wrap}
+.sw button{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:none;padding:0}
+.sw button.on{box-shadow:0 0 0 2px #111}
+.seg{display:flex;gap:6px;margin-bottom:18px}.seg button{flex:1;border:1px solid #ddd;background:#fff;border-radius:999px;padding:6px 0;font-size:11px;cursor:none}.seg button.on{background:#111;color:#fff;border-color:#111}
+input[type=range]{width:100%;accent-color:#111;margin:0 0 18px;cursor:none}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #eee;padding:9px 0}
+.row b{font-family:Georgia,serif;font-style:italic;font-size:22px;font-weight:400}
+.act{width:100%;margin-top:12px;background:#111;color:#fff;border:0;border-radius:999px;padding:12px;font-size:13px;letter-spacing:.04em;cursor:none}
+.act:hover{background:#333}
+#hint{position:fixed;left:40px;bottom:30px;font-size:12px;letter-spacing:.08em;color:#777;pointer-events:none}
+#cur{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1.5px solid #111;background:rgba(17,17,17,.06);pointer-events:none;transition:width .15s,height .15s,margin .15s,background .15s;z-index:9}
+#cur.hold{width:12px;height:12px;margin:-6px 0 0 -6px;background:#111}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<div id="title"><div class="lab">Nº 19 / Bonded Goods</div><h1>Molecule /<br><span>Kit.</span></h1><p>Snap atoms together by valence and watch them find their shape.</p></div>
+<div id="panel"><h4>Element</h4><div class="sw" id="sw"></div>
+<h4>Vibration</h4><input id="vib" type="range" min="0" max="1" step="0.01" value="0.3">
+<div class="row"><span>Atoms</span><b id="ac">0</b></div>
+<div class="row"><span>Bonds</span><b id="bc">0</b></div>
+<div class="row"><span>Formula</span><b id="fm">—</b></div>
+<div style="text-align:right;font-size:12px;color:#666;margin-top:-4px;min-height:16px" id="nm"></div>
+<button class="act" id="rnd">Build random molecule</button></div>
+<div id="hint">Click to place · Drag onto an atom to bond (again for double/triple) · Click to poke · Shift-click to remove</div>
+<div id="cur"></div>
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+const cur=document.getElementById('cur');
+addEventListener('pointermove',e=>{cur.style.transform=`translate(${e.clientX}px,${e.clientY}px)`;});
+function swatches(id,cols,cb){const el=document.getElementById(id);cols.forEach((c,i)=>{const b=document.createElement('button');b.style.background=c;if(!i)b.className='on';b.onclick=()=>{[...el.children].forEach((x,j)=>x.className=j===i?'on':'');cb(i);};el.appendChild(b);});}
+
+
+const EL={H:{c:'#f4f4f4',r:0.32,v:1,e:1},C:{c:'#2b2b2b',r:0.52,v:4,e:4},N:{c:'#3050f8',r:0.48,v:3,e:5},O:{c:'#ff2a1a',r:0.46,v:2,e:6},Cl:{c:'#1fd01f',r:0.6,v:1,e:7}};
+const ELS=['H','C','N','O','Cl']; let sel='C', vib=0.3;
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5)); renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#fff');
+scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),0.04).texture;
+const camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,0.1,100);
+scene.add(new THREE.HemisphereLight(0xffffff,0xeeeeee,0.5));
+const sun=new THREE.DirectionalLight(0xffffff,1.3); sun.position.set(3,12,6); sun.castShadow=true; sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera,{left:-10,right:10,top:10,bottom:-10,near:1,far:40}); sun.shadow.radius=8; scene.add(sun);
+const FLOOR=-3.2; const fl=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.ShadowMaterial({opacity:0.1})); fl.rotation.x=-Math.PI/2; fl.position.y=FLOOR; fl.receiveShadow=true; scene.add(fl);
+const sphereGeo=new THREE.SphereGeometry(1,40,28), cylGeo=new THREE.CylinderGeometry(1,1,1,16).translate(0,0.5,0);
+const elMat={}; for(const k of ELS)elMat[k]=new THREE.MeshPhysicalMaterial({color:EL[k].c,roughness:0.18,clearcoat:1,clearcoatRoughness:0.05,metalness:0});
+const bondMat=new THREE.MeshPhysicalMaterial({color:'#d8d8d8',roughness:0.3,clearcoat:0.6});
+const atoms=[], bonds=[], meshes=[];
+function addAtom(el,p){const m=new THREE.Mesh(sphereGeo,elMat[el]);m.scale.setScalar(EL[el].r);m.castShadow=true;scene.add(m);
+  const a={el,m,p:p.clone(),v:new THREE.Vector3(),id:Math.random()};m.userData.a=a;atoms.push(a);meshes.push(m);return a;}
+function used(a){let s=0;for(const b of bonds)if(b.a===a||b.b===a)s+=b.o;return s;}
+const free=a=>EL[a.el].v-used(a);
+function findBond(a,b){return bonds.find(x=>(x.a===a&&x.b===b)||(x.a===b&&x.b===a));}
+function addBond(a,b){const ex=findBond(a,b);
+  if(free(a)<1||free(b)<1)return false;
+  if(ex){if(ex.o>=3)return false;ex.o++;buildBondMesh(ex);return true;}
+  const bd={a,b,o:1,g:new THREE.Group()};scene.add(bd.g);bonds.push(bd);buildBondMesh(bd);return true;}
+function buildBondMesh(bd){bd.g.clear();for(let i=0;i<bd.o;i++){const c=new THREE.Mesh(cylGeo,bondMat);c.castShadow=true;bd.g.add(c);}}
+function removeAtom(a){for(const b of bonds.filter(b=>b.a===a||b.b===a)){scene.remove(b.g);bonds.splice(bonds.indexOf(b),1);}scene.remove(a.m);atoms.splice(atoms.indexOf(a),1);meshes.splice(meshes.indexOf(a.m),1);}
+const nbrs=a=>bonds.filter(b=>b.a===a||b.b===a).map(b=>b.a===a?b.b:b.a);
+const restLen=(b)=>(EL[b.a.el].r+EL[b.b.el].r)*1.55*(b.o===1?1:b.o===2?0.88:0.8);
+function lonePairs(a){return Math.max(0,(EL[a.el].e-used(a)-(EL[a.el].v-used(a)))/2);} // e - (bonding electrons contributed) - unpaired
+function idealAngle(a,n){const sn=n+Math.round(lonePairs(a));
+  if(sn<=2)return Math.PI; if(sn===3)return n===2?117*Math.PI/180:120*Math.PI/180;
+  if(n===4)return 109.47*Math.PI/180; if(n===3)return 107*Math.PI/180; if(n===2)return 104.5*Math.PI/180; return 109.47*Math.PI/180;}
+// molecules
+function components(){const seen=new Set(),out=[];for(const a of atoms){if(seen.has(a))continue;const c=[],st=[a];seen.add(a);
+  while(st.length){const x=st.pop();c.push(x);for(const y of nbrs(x))if(!seen.has(y)){seen.add(y);st.push(y);}}out.push(c);}return out;}
+function formula(c){const n={};for(const a of c)n[a.el]=(n[a.el]||0)+1;const keys=Object.keys(n);
+  const order=n.C?['C','H',...keys.filter(k=>k!=='C'&&k!=='H').sort()]:keys.sort();return order.filter(k=>n[k]).map(k=>k+(n[k]>1?n[k]:'')).join('');}
+function nameOf(c){const f=formula(c);if(c.some(a=>free(a)>0))return null;
+  const has=(e1,e2,o)=>bonds.some(b=>c.includes(b.a)&&((b.a.el===e1&&b.b.el===e2)||(b.a.el===e2&&b.b.el===e1))&&(!o||b.o===o));
+  const T={H2:'Hydrogen',O2:'Oxygen',N2:'Nitrogen',Cl2:'Chlorine',H2O:'Water',H2O2:'Hydrogen peroxide',CO2:'Carbon dioxide',CH4:'Methane',H3N:'Ammonia',ClH:'Hydrogen chloride',
+    C2H6:'Ethane',C2H4:'Ethene',C2H2:'Ethyne',CH4O:'Methanol',CH2O:'Formaldehyde',CHN:'Hydrogen cyanide',CH3Cl:'Chloromethane',CH2Cl2:'Dichloromethane',CHCl3:'Chloroform',CCl4:'Carbon tetrachloride',
+    H4N2:'Hydrazine',ClHO:'Hypochlorous acid',C3H8:'Propane',C3H6:'Propene',C4H10:'Butane',CH5N:'Methylamine',C2H4O2:'Acetic acid',C2H4O:'Acetaldehyde',C3H6O:'Acetone',CH2O2:'Formic acid',ClH2N:'Chloramine',
+    Cl3N:'Nitrogen trichloride',CH3NO:'Formamide',CH4N2O:'Urea',N2O:null};
+  if(f==='C2H6O')return has('O','H')?'Ethanol':'Dimethyl ether';
+  if(f==='C3H6O')return has('C','O',2)&&!has('O','H')?(bonds.some(b=>c.includes(b.a)&&b.o===2&&((b.a.el==='C'&&nbrs(b.a).filter(x=>x.el==='C').length===2)||(b.b.el==='C'&&nbrs(b.b).filter(x=>x.el==='C').length===2)))?'Acetone':'Propanal'):null;
+  if(f==='C2H4O2')return has('O','H')&&has('C','O',2)?'Acetic acid':null;
+  return T[f]||null;}
+function sub(f){return f.replace(/(\d+)/g,'<sub>$1</sub>');}
+// templates
+const TPL={water:{at:['O','H','H'],b:[[0,1,1],[0,2,1]]},methane:{at:['C','H','H','H','H'],b:[[0,1,1],[0,2,1],[0,3,1],[0,4,1]]},ammonia:{at:['N','H','H','H'],b:[[0,1,1],[0,2,1],[0,3,1]]},
+  co2:{at:['C','O','O'],b:[[0,1,2],[0,2,2]]},ethanol:{at:['C','C','O','H','H','H','H','H','H'],b:[[0,1,1],[1,2,1],[2,3,1],[0,4,1],[0,5,1],[0,6,1],[1,7,1],[1,8,1]]},
+  hcl:{at:['Cl','H'],b:[[0,1,1]]},ethene:{at:['C','C','H','H','H','H'],b:[[0,1,2],[0,2,1],[0,3,1],[1,4,1],[1,5,1]]},hcn:{at:['C','N','H'],b:[[0,1,3],[0,2,1]]},
+  formaldehyde:{at:['C','O','H','H'],b:[[0,1,2],[0,2,1],[0,3,1]]},n2:{at:['N','N'],b:[[0,1,3]]}};
+function spawn(name,c){const t=TPL[name];const as=t.at.map(e=>addAtom(e,c.clone().add(new THREE.Vector3().randomDirection().multiplyScalar(0.6+Math.random()*0.6))));
+  for(const [i,j,o] of t.b)for(let k=0;k<o;k++)addBond(as[i],as[j]);return as;}
+spawn('water',new THREE.Vector3(-3,0.6,0)); spawn('methane',new THREE.Vector3(2.4,0.8,-0.5)); spawn('co2',new THREE.Vector3(-0.2,-1.4,0.6));
+addAtom('O',new THREE.Vector3(1.2,2.4,0.5)); addAtom('H',new THREE.Vector3(-1.5,2.6,0)); addAtom('N',new THREE.Vector3(4.4,-1.2,0.4));
+// input
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2(); let drag=null, focus=null;
+function setMouse(e){mouse.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);}
+function planeAt(p){const n=new THREE.Vector3();camera.getWorldDirection(n);return new THREE.Plane().setFromNormalAndCoplanarPoint(n,p);}
+function hitPlane(pl){ray.setFromCamera(mouse,camera);const v=new THREE.Vector3();return ray.ray.intersectPlane(pl,v)?v:null;}
+addEventListener('pointermove',e=>setMouse(e));
+renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+renderer.domElement.addEventListener('pointerdown',e=>{setMouse(e);ray.setFromCamera(mouse,camera);const h=ray.intersectObjects(meshes,false)[0];
+  if(h){const a=h.object.userData.a;if(e.shiftKey||e.button===2){removeAtom(a);return;}const pl=planeAt(a.p);drag={a,pl,off:a.p.clone().sub(hitPlane(pl)),moved:0};focus=a;cur.classList.add('hold');return;}
+  if(atoms.length>=60)return;const p=hitPlane(planeAt(new THREE.Vector3(0,0.5,0)));if(p){focus=addAtom(sel,p);}});
+addEventListener('pointerup',()=>{if(!drag)return;const a=drag.a;
+  if(drag.moved<0.15){const comp=components().find(c=>c.includes(a));for(const x of comp)x.v.add(new THREE.Vector3().randomDirection().multiplyScalar(2.5));}
+  else{let best=null,bd=1e9;for(const o of atoms){if(o===a)continue;const d=o.p.distanceTo(a.p);if(d<(EL[a.el].r+EL[o.el].r)*2.4&&d<bd&&free(o)>0){bd=d;best=o;}}
+    if(best&&free(a)>0)addBond(a,best);}
+  drag=null;cur.classList.remove('hold');});
+swatches('sw',ELS.map(k=>EL[k].c),i=>sel=ELS[i]);
+document.querySelectorAll('#sw button').forEach((b,i)=>{b.textContent=ELS[i];b.style.cssText+=`;font:600 10px Helvetica;color:${i===0?'#333':'#fff'}`;});
+document.querySelectorAll('#sw button')[1].className='on';document.querySelectorAll('#sw button')[0].className='';
+document.getElementById('vib').oninput=e=>vib=+e.target.value;
+document.getElementById('rnd').onclick=()=>{const ks=Object.keys(TPL);const as=spawn(ks[Math.floor(Math.random()*ks.length)],new THREE.Vector3((Math.random()-.5)*5,(Math.random()-.5)*2+0.5,0));focus=as[0];
+  while(atoms.length>60)removeAtom(atoms[0]);};
+const atEl=document.getElementById('ac'),bdEl=document.getElementById('bc'),fEl=document.getElementById('fm'),nEl=document.getElementById('nm');
+const clock=new THREE.Clock(); let T=0, frame=0; const F=new THREE.Vector3(), up=new THREE.Vector3(0,1,0);
+function physics(dt){
+  for(const a of atoms)a.f=(a.f||new THREE.Vector3()).set(0,0,0);
+  for(const b of bonds){F.copy(b.b.p).sub(b.a.p);const d=F.length()||1e-4;const k=60*(d-restLen(b));F.multiplyScalar(k/d);b.a.f.add(F);b.b.f.sub(F);}
+  for(const a of atoms){const ns=nbrs(a);if(ns.length<2)continue;const th=idealAngle(a,ns.length);
+    for(let i=0;i<ns.length;i++)for(let j=i+1;j<ns.length;j++){const x=ns[i],y=ns[j];const la=x.p.distanceTo(a.p),lb=y.p.distanceTo(a.p);
+      const t=Math.sqrt(Math.max(0.01,la*la+lb*lb-2*la*lb*Math.cos(th)));F.copy(y.p).sub(x.p);const d=F.length()||1e-4;F.multiplyScalar(25*(d-t)/d);x.f.add(F);y.f.sub(F);}}
+  for(let i=0;i<atoms.length;i++)for(let j=i+1;j<atoms.length;j++){const a=atoms[i],b=atoms[j];F.copy(b.p).sub(a.p);const d=F.length()||1e-4;if(findBond(a,b)||nbrs(a).some(x=>findBond(x,b)))continue;const m=(EL[a.el].r+EL[b.el].r)*2.2;
+    if(d<m+0.8){const s=d<m?40*(m-d):4*(m+0.8-d);F.multiplyScalar(s/d);a.f.sub(F);b.f.add(F);}}
+  for(const a of atoms){if(drag&&drag.a===a)continue;a.f.addScaledVector(a.p,-0.12);if(vib>0)a.f.add(new THREE.Vector3().randomDirection().multiplyScalar(vib*30*Math.random()));
+    a.v.addScaledVector(a.f,dt/ (a.el==='H'?0.6:1.2)); a.v.multiplyScalar(Math.exp(-3.5*dt)); a.p.addScaledVector(a.v,dt);
+    if(a.p.y<FLOOR+EL[a.el].r+0.3){a.p.y=FLOOR+EL[a.el].r+0.3;a.v.y=Math.abs(a.v.y)*0.3;}}
+}
+function loop(){
+  const dt=Math.min(clock.getDelta(),1/30); T+=dt;
+  if(drag){const p=hitPlane(drag.pl);if(p){const np=p.add(drag.off);drag.moved+=np.distanceTo(drag.a.p);drag.a.p.copy(np);drag.a.v.set(0,0,0);}}
+  for(let s=0;s<4;s++)physics(dt/4);
+  const vd=new THREE.Vector3();camera.getWorldDirection(vd);
+  for(const a of atoms)a.m.position.copy(a.p);
+  for(const b of bonds){const d=new THREE.Vector3().subVectors(b.b.p,b.a.p),L=d.length();const q=new THREE.Quaternion().setFromUnitVectors(up,d.clone().normalize());
+    const side=new THREE.Vector3().crossVectors(d,vd).normalize();const off=b.o===1?[0]:b.o===2?[-0.09,0.09]:[-0.13,0,0.13];
+    b.g.children.forEach((c,i)=>{c.position.copy(b.a.p).addScaledVector(side,off[i]);c.quaternion.copy(q);const r=b.o===1?0.09:0.055;c.scale.set(r,L,r);});}
+  if(frame++%8===0){atEl.textContent=atoms.length;bdEl.textContent=bonds.reduce((s,b)=>s+b.o,0);
+    const comps=components().filter(c=>c.length>1);let c=focus&&atoms.includes(focus)?components().find(x=>x.includes(focus)):comps.sort((a,b)=>b.length-a.length)[0];
+    if(c){fEl.innerHTML=sub(formula(c));const n=nameOf(c);const fr=c.reduce((s,a)=>s+free(a),0);nEl.textContent=n||(fr?`${fr} open bond${fr>1?'s':''}`:'unnamed');}else{fEl.textContent='—';nEl.textContent='';}}
+  const a=Math.sin(T*0.07)*0.3;
+  camera.position.set(Math.sin(a)*19,4.5+Math.sin(T*0.1)*0.4,Math.cos(a)*19); camera.lookAt(2.2,0.6,0);
+  renderer.render(scene,camera); requestAnimationFrame(loop);
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+window.__t={atoms,bonds,camera,components,formula,nameOf,addBond,addAtom,free,spawn,V:THREE.Vector3};
+loop();
+
+</script></body></html>

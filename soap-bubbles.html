@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Soap Bubbles</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:"Helvetica Neue",Arial,sans-serif;color:#111;cursor:none;user-select:none}
+canvas{display:block}
+#title{position:fixed;top:34px;left:40px;pointer-events:none}
+#title .lab{font-variant:small-caps;letter-spacing:.18em;font-size:13px;text-transform:lowercase;color:#555}
+#title h1{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:400;font-size:64px;line-height:.95;margin:10px 0 12px}
+#title h1 span{color:#4aa8ff}
+#title p{margin:0;font-size:14px;color:#666}
+#panel{position:fixed;right:32px;top:50%;transform:translateY(-50%);width:220px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid #eee;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:20px;font-size:12px}
+#panel h4{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#888;font-weight:500}
+.sw{display:flex;gap:9px;margin-bottom:20px;flex-wrap:wrap}
+.sw button{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:none;padding:0}
+.sw button.on{box-shadow:0 0 0 2px #111}
+.seg{display:flex;gap:6px;margin-bottom:18px}.seg button{flex:1;border:1px solid #ddd;background:#fff;border-radius:999px;padding:6px 0;font-size:11px;cursor:none}.seg button.on{background:#111;color:#fff;border-color:#111}
+input[type=range]{width:100%;accent-color:#111;margin:0 0 18px;cursor:none}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #eee;padding:9px 0}
+.row b{font-family:Georgia,serif;font-style:italic;font-size:22px;font-weight:400}
+.act{width:100%;margin-top:12px;background:#111;color:#fff;border:0;border-radius:999px;padding:12px;font-size:13px;letter-spacing:.04em;cursor:none}
+.act:hover{background:#333}
+#hint{position:fixed;left:40px;bottom:30px;font-size:12px;letter-spacing:.08em;color:#777;pointer-events:none}
+#cur{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1.5px solid #111;background:rgba(17,17,17,.06);pointer-events:none;transition:width .15s,height .15s,margin .15s,background .15s;z-index:9}
+#cur.hold{width:12px;height:12px;margin:-6px 0 0 -6px;background:#111}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<div id="title"><div class="lab">Nº 10 / Air Goods</div><h1>Soap /<br><span>Bubbles.</span></h1><p>Thin-film bubbles that drift, cling together and pop.</p></div>
+<div id="panel"><h4>Film tint</h4><div class="sw" id="sw"></div>
+<h4>Breeze</h4><input id="breeze" type="range" min="0" max="1.5" step="0.01" value="0.4">
+<div class="row"><span>Bubbles</span><b id="bc">6</b></div>
+<div class="row"><span>Popped</span><b id="pc">0</b></div>
+<button class="act" id="cloud">Blow a cloud</button></div>
+<div id="hint">Hold to blow · Release to float · Click a bubble to pop</div>
+<div id="cur"></div>
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+const cur=document.getElementById('cur');
+addEventListener('pointermove',e=>{cur.style.transform=`translate(${e.clientX}px,${e.clientY}px)`;});
+function swatches(id,cols,cb){const el=document.getElementById(id);cols.forEach((c,i)=>{const b=document.createElement('button');b.style.background=c;if(!i)b.className='on';b.onclick=()=>{[...el.children].forEach((x,j)=>x.className=j===i?'on':'');cb(i);};el.appendChild(b);});}
+
+const TINTS=['#ffffff','#ffc6ea','#c4e4ff','#d4ffc8','#fff0b8'];
+let tint=0, breeze=0.4, popped=0;
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5)); renderer.setSize(innerWidth,innerHeight);
+
+document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#fff');
+// colourful room so the thin film has something to reflect
+const envScene=new RoomEnvironment();
+[['#ff7ab8',[-4,3,-3]],['#62c6ff',[4,2,-4]],['#ffd84a',[0,5,4]],['#7dffa8',[-4,-1,4]]].forEach(([c,p])=>{
+  const m=new THREE.Mesh(new THREE.BoxGeometry(2.5,2.5,0.2),new THREE.MeshBasicMaterial({color:c}));m.position.set(...p);m.lookAt(0,0,0);envScene.add(m);});
+const pmrem=new THREE.PMREMGenerator(renderer); scene.environment=pmrem.fromScene(envScene,0.03).texture;
+const camera=new THREE.PerspectiveCamera(40,innerWidth/innerHeight,0.1,100);
+scene.add(new THREE.HemisphereLight(0xffffff,0xeeeeee,0.6));
+const dl=new THREE.DirectionalLight(0xffffff,1.2); dl.position.set(3,8,6); scene.add(dl);
+const FLOOR=-4.2;
+// soft floor shadow texture
+const sc=document.createElement('canvas');sc.width=sc.height=64;const sx=sc.getContext('2d');const sg=sx.createRadialGradient(32,32,0,32,32,32);
+sg.addColorStop(0,'rgba(60,80,110,.16)');sg.addColorStop(1,'rgba(0,0,0,0)');sx.fillStyle=sg;sx.fillRect(0,0,64,64);
+const shTex=new THREE.CanvasTexture(sc), shGeo=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);
+
+const geo=new THREE.SphereGeometry(1,64,40);
+function bubbleMat(){
+  const u={uTime:{value:0},uSeed:{value:Math.random()*100},uAmp:{value:0.02}};
+  const m=new THREE.MeshPhysicalMaterial({color:TINTS[tint],roughness:0.02,metalness:0,transmission:1,thickness:0.02,ior:1.05,
+    iridescence:1,iridescenceIOR:1.33,iridescenceThicknessRange:[250,1000],clearcoat:1,clearcoatRoughness:0,envMapIntensity:2.6,specularIntensity:1});
+  m.onBeforeCompile=s=>{Object.assign(s.uniforms,u);
+    s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nuniform float uTime,uSeed,uAmp;')
+     .replace('#include <begin_vertex>',`#include <begin_vertex>
+      float w=sin(position.x*3.1+uTime*2.1+uSeed)*sin(position.y*2.7+uTime*1.7)+sin(position.z*3.3+uTime*2.6+uSeed*2.0)*0.7;
+      transformed+=normal*w*uAmp;`);
+    s.fragmentShader=s.fragmentShader.replace('#include <dithering_fragment>',`#include <dithering_fragment>
+      float fr=pow(1.0-abs(dot(normalize(vNormal),normalize(vViewPosition))),2.5);
+      gl_FragColor.rgb=mix(gl_FragColor.rgb,gl_FragColor.rgb*vec3(0.62,0.7,0.88),fr*0.55);`);};
+  m.customProgramCacheKey=()=>'bubble';
+  return {m,u};
+}
+const bubbles=[];
+function addBubble(pos,r,vel){
+  const {m,u}=bubbleMat(); const mesh=new THREE.Mesh(geo,m); mesh.position.copy(pos); mesh.scale.setScalar(r); scene.add(mesh);
+  const sh=new THREE.Mesh(shGeo,new THREE.MeshBasicMaterial({map:shTex,transparent:true,depthWrite:false}));sh.position.y=FLOOR+0.01;scene.add(sh);
+  const b={mesh,u,sh,pos:pos.clone(),vel:vel||new THREE.Vector3(),r,age:0,life:30+Math.random()*30,growing:false,seed:Math.random()*10};
+  bubbles.push(b); return b;
+}
+function removeBubble(b){scene.remove(b.mesh,b.sh);b.mesh.material.dispose();b.sh.material.dispose();bubbles.splice(bubbles.indexOf(b),1);}
+// droplets
+const MAXD=500; const dropMesh=new THREE.InstancedMesh(new THREE.SphereGeometry(1,8,6),new THREE.MeshPhysicalMaterial({color:'#bfe3ff',roughness:0,transmission:0.6,thickness:0.1,envMapIntensity:2}),MAXD);
+dropMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); dropMesh.count=0; scene.add(dropMesh);
+const drops=[];
+function pop(b){
+  for(let i=0;i<Math.min(40,10+b.r*18);i++){const d=new THREE.Vector3().randomDirection();
+    drops.push({p:b.pos.clone().addScaledVector(d,b.r),v:d.multiplyScalar(2+Math.random()*3).add(b.vel),t:0,life:0.5+Math.random()*0.4,s:0.025+Math.random()*0.03});}
+  if(drops.length>MAXD)drops.splice(0,drops.length-MAXD);
+  removeBubble(b); popped++;
+}
+// start
+for(let i=0;i<6;i++)addBubble(new THREE.Vector3((Math.random()-.5)*10,(Math.random()-.3)*4,(Math.random()-.5)*4),0.5+Math.random()*0.9);
+// input
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2(); let blowing=null, lastHit=new THREE.Vector3(), curVel=new THREE.Vector3();
+function planeHit(){ray.setFromCamera(mouse,camera);const p=new THREE.Vector3();ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,0,1),0),p);return p;}
+function setMouse(e){mouse.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);}
+addEventListener('pointermove',e=>setMouse(e));
+renderer.domElement.addEventListener('pointerdown',e=>{
+  setMouse(e); ray.setFromCamera(mouse,camera);
+  let best=null,bd=1e9; const tmp=new THREE.Vector3();
+  for(const b of bubbles){const s=new THREE.Sphere(b.pos,b.r);if(ray.ray.intersectSphere(s,tmp)){const d=tmp.distanceTo(ray.ray.origin);if(d<bd){bd=d;best=b;}}}
+  if(best){pop(best);return;}
+  const p=planeHit(); lastHit.copy(p); blowing=addBubble(p,0.12); blowing.growing=true; cur.classList.add('hold');
+});
+addEventListener('pointerup',()=>{if(!blowing)return; blowing.growing=false;
+  blowing.vel.set(curVel.x*0.4,0.5+Math.random()*0.3+curVel.y*0.3,(Math.random()-.5)*0.4); blowing=null; cur.classList.remove('hold');});
+swatches('sw',TINTS,i=>tint=i);
+document.getElementById('breeze').oninput=e=>breeze=+e.target.value;
+document.getElementById('cloud').onclick=()=>{for(let i=0;i<10;i++)addBubble(new THREE.Vector3(-9+Math.random()*3,-2+Math.random()*3,(Math.random()-.5)*3),0.3+Math.random()*0.8,new THREE.Vector3(1+Math.random(),0.4+Math.random()*0.5,(Math.random()-.5)*0.5));};
+const bcEl=document.getElementById('bc'), pcEl=document.getElementById('pc');
+// loop
+const clock=new THREE.Clock(); let T=0, frame=0; const m4=new THREE.Matrix4(), tv=new THREE.Vector3();
+function loop(){
+  const dt=Math.min(clock.getDelta(),1/30); T+=dt;
+  if(blowing){const p=planeHit(); curVel.copy(p).sub(lastHit).divideScalar(dt); lastHit.copy(p);
+    blowing.r=Math.min(blowing.r+dt*(0.9-blowing.r*0.3),1.9); blowing.pos.lerp(p.clone().add(new THREE.Vector3(0,blowing.r*0.6,0)),1-Math.exp(-14*dt)); blowing.vel.set(0,0,0);}
+  for(const b of bubbles){
+    if(b.growing)continue; b.age+=dt;
+    const wind=tv.set(breeze*1.4*(0.6+0.4*Math.sin(T*0.31+b.seed)),0.18*Math.sin(T*0.5+b.seed*3)+0.02,0.4*breeze*Math.sin(T*0.23+b.seed*2));
+    b.vel.lerp(wind,1-Math.exp(-0.7*dt)); b.pos.addScaledVector(b.vel,dt);
+  }
+  // stick & merge
+  for(let i=0;i<bubbles.length;i++)for(let j=i+1;j<bubbles.length;j++){
+    const a=bubbles[i],b=bubbles[j]; const d=a.pos.distanceTo(b.pos), s=a.r+b.r; if(d>=s)continue;
+    if(d<Math.max(a.r,b.r)*0.45&&!a.growing&&!b.growing){const r=Math.cbrt(a.r**3+b.r**3);a.pos.lerp(b.pos,b.r**3/(a.r**3+b.r**3));a.r=r;a.vel.lerp(b.vel,0.5);b.dead=true;continue;}
+    const n=tv.copy(b.pos).sub(a.pos).normalize(), corr=(s*0.8-d)*Math.min(1,6*dt);
+    const wa=a.growing?0:(b.growing?1:0.5), wb=1-wa;
+    a.pos.addScaledVector(n,-corr*wa); b.pos.addScaledVector(n,corr*wb);
+    const mv=a.vel.clone().add(b.vel).multiplyScalar(0.5); if(!a.growing)a.vel.lerp(mv,Math.min(1,3*dt)); if(!b.growing)b.vel.lerp(mv,Math.min(1,3*dt));
+    a.wob=b.wob=0.025;
+  }
+  for(const b of [...bubbles]){
+    if(b.dead){removeBubble(b);continue;}
+    if(!b.growing&&(b.age>b.life||b.pos.y-b.r<FLOOR||Math.abs(b.pos.x)>16||b.pos.y>12)){ if(b.pos.y-b.r<FLOOR||b.age>b.life)pop(b); else removeBubble(b); continue;}
+    b.wob=Math.max((b.wob||0)-dt*0.05,0);
+    b.u.uTime.value=T; b.u.uAmp.value=(b.growing?0.03:0.012)+b.wob;
+    b.mesh.position.copy(b.pos); b.mesh.scale.setScalar(b.r);
+    b.sh.position.set(b.pos.x,FLOOR+0.01,b.pos.z); const hgt=b.pos.y-FLOOR; b.sh.scale.setScalar(b.r*2.2+hgt*0.15); b.sh.material.opacity=Math.max(0.15,1-hgt/9);
+  }
+  let n=0; for(let i=drops.length-1;i>=0;i--){const d=drops[i];d.t+=dt;if(d.t>d.life){drops.splice(i,1);continue;}
+    d.v.y-=9*dt; d.v.multiplyScalar(1-2*dt); d.p.addScaledVector(d.v,dt);
+    const s=d.s*(1-d.t/d.life); m4.makeScale(s,s,s).setPosition(d.p); dropMesh.setMatrixAt(n++,m4);}
+  dropMesh.count=n; dropMesh.instanceMatrix.needsUpdate=true;
+  if(frame++%10===0){bcEl.textContent=bubbles.length;pcEl.textContent=popped;}
+  const a=Math.sin(T*0.07)*0.25;
+  camera.position.set(Math.sin(a)*15,0.8+Math.sin(T*0.11)*0.5,Math.cos(a)*15); camera.lookAt(0,0,0);
+  renderer.render(scene,camera); requestAnimationFrame(loop);
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+window.__t={bubbles,camera,get popped(){return popped}};
+loop();
+
+</script></body></html>
