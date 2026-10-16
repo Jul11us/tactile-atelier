@@ -31,12 +31,12 @@ Small Games 收集了一组独立 HTML 小实验，围绕材质、运动和交�
 <table>
 <tr>
 <td width="33%"><a href="https://jul11us.github.io/small-games/jelly-bricks.html"><img src="assets/previews/jelly-bricks.jpg" alt="半透明软糖积木" width="100%"></a><br><strong>Jelly Bricks · 软糖积木</strong><br><sub>拎起来，堆起来，再推倒。</sub></td>
-<td width="33%"><a href="https://jul11us.github.io/small-games/mochi-pets.html"><img src="assets/previews/mochi-pets.jpg" alt="柔软的麻薯团子" width="100%"></a><br><strong>Mochi Pets · 麻薯团子</strong><br><sub>戳一下，捏一下，轻轻一跳。</sub></td>
+<td width="33%"><a href="https://jul11us.github.io/small-games/mochi-pets.html"><img src="assets/previews/mochi-pets.jpg" alt="柔软的麻薯小宠" width="100%"></a><br><strong>Mochi Pets · 麻薯小宠</strong><br><sub>戳一下，捏一下，轻轻一跳。</sub></td>
 <td width="33%"><a href="https://jul11us.github.io/small-games/soap-bubbles.html"><img src="assets/previews/soap-bubbles.jpg" alt="漂浮的肥皂泡" width="100%"></a><br><strong>Soap Bubbles · 肥皂泡</strong><br><sub>吹出一团泡泡，看它们飘远。</sub></td>
 </tr>
 <tr>
 <td><a href="https://jul11us.github.io/small-games/caramel-pudding.html"><img src="assets/previews/caramel-pudding.jpg" alt="焦糖布丁" width="100%"></a><br><strong>Caramel Pudding · 焦糖布丁</strong><br><sub>手停了，布丁还在晃。</sub></td>
-<td><a href="https://jul11us.github.io/small-games/sand-garden.html"><img src="assets/previews/sand-garden.jpg" alt="沙纹与光滑的石子" width="100%"></a><br><strong>Sand Garden · 沙盘庭园</strong><br><sub>耙一道纹，放一颗石子。</sub></td>
+<td><a href="https://jul11us.github.io/small-games/sand-garden.html"><img src="assets/previews/sand-garden.jpg" alt="沙纹与光滑的石子" width="100%"></a><br><strong>Sand Garden · 枯山水沙盘</strong><br><sub>耙一道纹，放一颗石子。</sub></td>
 <td><a href="https://jul11us.github.io/small-games/crystal-grow.html"><img src="assets/previews/crystal-grow.jpg" alt="玻璃皿中生长的晶体" width="100%"></a><br><strong>Crystal Grow · 晶体生长</strong><br><sub>种下一粒晶种，等待形状出现。</sub></td>
 </tr>
 </table>
@@ -51,14 +51,14 @@ Small Games 收集了一组独立 HTML 小实验，围绕材质、运动和交�
 | 10 | [Soap Bubbles · 肥皂泡](https://jul11us.github.io/small-games/soap-bubbles.html) | 按住吹泡泡，松开让它漂浮，点击戳破。 |
 | 11 | [Marble Run · 弹珠轨道](https://jul11us.github.io/small-games/marble-run.html) | 拖动轨道；右键或 R 旋转；滚轮调整高度。 |
 | 12 | [Clay Stamp · 黏土印章](https://jul11us.github.io/small-games/clay-stamp.html) | 点击盖章，拖动绘制，Shift 拖动涂抹。 |
-| 13 | [Mochi Pets · 麻薯团子](https://jul11us.github.io/small-games/mochi-pets.html) | 戳一下晃动，按住挤压，拖动拉长。 |
+| 13 | [Mochi Pets · 麻薯小宠](https://jul11us.github.io/small-games/mochi-pets.html) | 戳一下晃动，按住挤压，拖动拉长。 |
 | 14 | [Glass Chimes · 玻璃风铃](https://jul11us.github.io/small-games/wind-chimes.html) | 先点击启用声音，再划过玻璃管。 |
-| 15 | [Sand Garden · 沙盘庭园](https://jul11us.github.io/small-games/sand-garden.html) | 拖动耙沙，双击放石子。 |
+| 15 | [Sand Garden · 枯山水沙盘](https://jul11us.github.io/small-games/sand-garden.html) | 拖动耙沙，双击放石子。 |
 | 16 | [Gel Pens · 凝胶画笔](https://jul11us.github.io/small-games/gel-pens.html) | 拖动画画，调节 Flow 让墨水流动。 |
 | 17 | [Popcorn · 爆米花](https://jul11us.github.io/small-games/popcorn.html) | 按住加热，松开冷却，再次加热重新爆开。 |
 | 18 | [Data Garden · 数据花园](https://jul11us.github.io/small-games/data-garden.html) | 输入数字长出花朵，悬停查看数值。 |
 | 19 | [Molecule Kit · 分子积木](https://jul11us.github.io/small-games/molecule-kit.html) | 放置原子，拖到一起连接成键。 |
-| 20 | [pH Lab · 酸碱实验](https://jul11us.github.io/small-games/ph-lab.html) | 点击滴入溶液，A / B 切换酸与碱。 |
+| 20 | [pH Lab · 酸碱实验室](https://jul11us.github.io/small-games/ph-lab.html) | 点击滴入溶液，A / B 切换酸与碱。 |
 | 21 | [Crystal Grow · 晶体生长](https://jul11us.github.io/small-games/crystal-grow.html) | 点击溶液播种，调整冷却速度与物质种类。 |
 | 22 | [Caramel Pudding · 焦糖布丁](https://jul11us.github.io/small-games/caramel-pudding.html) | 戳一下晃动，拖动滑行，空格摇晃桌面。 |
 | 25 | [Bubble Wrap · 气泡膜](https://jul11us.github.io/small-games/bubble-wrap.html) | 按下戳破，拖动戳破一整排。 |
