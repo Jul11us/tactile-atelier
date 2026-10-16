@@ -1,16 +1,16 @@
 <div align="center">
 
-<sub>SMALL GAMES · 一组关于手感的网页小玩具</sub>
+<sub>TACTILE ATELIER · 触感工坊</sub>
 
 # 把玩，一点小东西。
 
 柔软的物件，简单的动作，留一点玩的时间。
 
-**[打开玩具集 ↗](https://jul11us.github.io/small-games/)** · [English](README.md) · [安装 Skill](#再做一个)
+**[打开玩具集 ↗](https://jul11us.github.io/tactile-atelier/)** · [English](README.md) · [安装 Skill](#再做一个)
 
 <br>
 
-[![Small Games — 手感网页小玩具](assets/readme/cover.png)](https://jul11us.github.io/small-games/)
+[![Tactile Atelier — 手感网页小玩具](assets/readme/cover.png)](https://jul11us.github.io/tactile-atelier/)
 
 <br>
 
@@ -24,46 +24,46 @@
 
 软糖积木先被拉长，再离开桌面。布丁晃了几下，才慢慢停住。一张气泡膜，等着下一次按下。
 
-Small Games 收集了一组独立 HTML 小实验，围绕材质、运动和交互展开。打开一个场景，照着提示拉、戳、耙、画、堆，或者看它自己动一会儿。随附的 **tactile-toy** Skill，则把这套制作方法整理成了下一次创作的起点。
+Tactile Atelier（触感工坊）收集了一组独立 HTML 小实验，围绕材质、运动和交互展开。打开一个场景，照着提示拉、戳、耙、画、堆，或者看它自己动一会儿。随附的 **tactile-toy** Skill，则把这套制作方法整理成了下一次创作的起点。
 
 ## 桌上的几样东西
 
 <table>
 <tr>
-<td width="33%"><a href="https://jul11us.github.io/small-games/jelly-bricks.html"><img src="assets/previews/jelly-bricks.jpg" alt="半透明软糖积木" width="100%"></a><br><strong>Jelly Bricks · 软糖积木</strong><br><sub>拎起来，堆起来，再推倒。</sub></td>
-<td width="33%"><a href="https://jul11us.github.io/small-games/mochi-pets.html"><img src="assets/previews/mochi-pets.jpg" alt="柔软的麻薯小宠" width="100%"></a><br><strong>Mochi Pets · 麻薯小宠</strong><br><sub>戳一下，捏一下，轻轻一跳。</sub></td>
-<td width="33%"><a href="https://jul11us.github.io/small-games/soap-bubbles.html"><img src="assets/previews/soap-bubbles.jpg" alt="漂浮的肥皂泡" width="100%"></a><br><strong>Soap Bubbles · 肥皂泡</strong><br><sub>吹出一团泡泡，看它们飘远。</sub></td>
+<td width="33%"><a href="https://jul11us.github.io/tactile-atelier/jelly-bricks.html"><img src="assets/previews/jelly-bricks.jpg" alt="半透明软糖积木" width="100%"></a><br><strong>Jelly Bricks · 软糖积木</strong><br><sub>拎起来，堆起来，再推倒。</sub></td>
+<td width="33%"><a href="https://jul11us.github.io/tactile-atelier/mochi-pets.html"><img src="assets/previews/mochi-pets.jpg" alt="柔软的麻薯小宠" width="100%"></a><br><strong>Mochi Pets · 麻薯小宠</strong><br><sub>戳一下，捏一下，轻轻一跳。</sub></td>
+<td width="33%"><a href="https://jul11us.github.io/tactile-atelier/soap-bubbles.html"><img src="assets/previews/soap-bubbles.jpg" alt="漂浮的肥皂泡" width="100%"></a><br><strong>Soap Bubbles · 肥皂泡</strong><br><sub>吹出一团泡泡，看它们飘远。</sub></td>
 </tr>
 <tr>
-<td><a href="https://jul11us.github.io/small-games/caramel-pudding.html"><img src="assets/previews/caramel-pudding.jpg" alt="焦糖布丁" width="100%"></a><br><strong>Caramel Pudding · 焦糖布丁</strong><br><sub>手停了，布丁还在晃。</sub></td>
-<td><a href="https://jul11us.github.io/small-games/sand-garden.html"><img src="assets/previews/sand-garden.jpg" alt="沙纹与光滑的石子" width="100%"></a><br><strong>Sand Garden · 枯山水沙盘</strong><br><sub>耙一道纹，放一颗石子。</sub></td>
-<td><a href="https://jul11us.github.io/small-games/crystal-grow.html"><img src="assets/previews/crystal-grow.jpg" alt="玻璃皿中生长的晶体" width="100%"></a><br><strong>Crystal Grow · 晶体生长</strong><br><sub>种下一粒晶种，等待形状出现。</sub></td>
+<td><a href="https://jul11us.github.io/tactile-atelier/caramel-pudding.html"><img src="assets/previews/caramel-pudding.jpg" alt="焦糖布丁" width="100%"></a><br><strong>Caramel Pudding · 焦糖布丁</strong><br><sub>手停了，布丁还在晃。</sub></td>
+<td><a href="https://jul11us.github.io/tactile-atelier/sand-garden.html"><img src="assets/previews/sand-garden.jpg" alt="沙纹与光滑的石子" width="100%"></a><br><strong>Sand Garden · 枯山水沙盘</strong><br><sub>耙一道纹，放一颗石子。</sub></td>
+<td><a href="https://jul11us.github.io/tactile-atelier/crystal-grow.html"><img src="assets/previews/crystal-grow.jpg" alt="玻璃皿中生长的晶体" width="100%"></a><br><strong>Crystal Grow · 晶体生长</strong><br><sub>种下一粒晶种，等待形状出现。</sub></td>
 </tr>
 </table>
 
 ## 完整玩具集
 
-点击名称即可打开网页；每个玩具的 [HTML 源码](https://github.com/Jul11us/small-games) 也都在仓库中。
+点击名称即可打开网页；每个玩具的 [HTML 源码](https://github.com/Jul11us/tactile-atelier) 也都在仓库中。
 
 | Nº | 玩具 | 从这个动作开始 |
 | :-- | :-- | :-- |
-| 09 | [Jelly Bricks · 软糖积木](https://jul11us.github.io/small-games/jelly-bricks.html) | 抓起积木，放下吸附；按空格让它们晃动。 |
-| 10 | [Soap Bubbles · 肥皂泡](https://jul11us.github.io/small-games/soap-bubbles.html) | 按住吹泡泡，松开让它漂浮，点击戳破。 |
-| 11 | [Marble Run · 弹珠轨道](https://jul11us.github.io/small-games/marble-run.html) | 拖动轨道；右键或 R 旋转；滚轮调整高度。 |
-| 12 | [Clay Stamp · 黏土印章](https://jul11us.github.io/small-games/clay-stamp.html) | 点击盖章，拖动绘制，Shift 拖动涂抹。 |
-| 13 | [Mochi Pets · 麻薯小宠](https://jul11us.github.io/small-games/mochi-pets.html) | 戳一下晃动，按住挤压，拖动拉长。 |
-| 14 | [Glass Chimes · 玻璃风铃](https://jul11us.github.io/small-games/wind-chimes.html) | 先点击启用声音，再划过玻璃管。 |
-| 15 | [Sand Garden · 枯山水沙盘](https://jul11us.github.io/small-games/sand-garden.html) | 拖动耙沙，双击放石子。 |
-| 16 | [Gel Pens · 凝胶画笔](https://jul11us.github.io/small-games/gel-pens.html) | 拖动画画，调节 Flow 让墨水流动。 |
-| 17 | [Popcorn · 爆米花](https://jul11us.github.io/small-games/popcorn.html) | 按住加热，松开冷却，再次加热重新爆开。 |
-| 18 | [Data Garden · 数据花园](https://jul11us.github.io/small-games/data-garden.html) | 输入数字长出花朵，悬停查看数值。 |
-| 19 | [Molecule Kit · 分子积木](https://jul11us.github.io/small-games/molecule-kit.html) | 放置原子，拖到一起连接成键。 |
-| 20 | [pH Lab · 酸碱实验室](https://jul11us.github.io/small-games/ph-lab.html) | 点击滴入溶液，A / B 切换酸与碱。 |
-| 21 | [Crystal Grow · 晶体生长](https://jul11us.github.io/small-games/crystal-grow.html) | 点击溶液播种，调整冷却速度与物质种类。 |
-| 22 | [Caramel Pudding · 焦糖布丁](https://jul11us.github.io/small-games/caramel-pudding.html) | 戳一下晃动，拖动滑行，空格摇晃桌面。 |
-| 25 | [Bubble Wrap · 气泡膜](https://jul11us.github.io/small-games/bubble-wrap.html) | 按下戳破，拖动戳破一整排。 |
-| 26 | [Kinetic Sand · 动力沙](https://jul11us.github.io/small-games/kinetic-sand.html) | 拖动切开，长按挤压。 |
-| 27 | [Squishy Slime · 软泥](https://jul11us.github.io/small-games/slime.html) | 抓住拉长，点击戳一下。 |
+| 09 | [Jelly Bricks · 软糖积木](https://jul11us.github.io/tactile-atelier/jelly-bricks.html) | 抓起积木，放下吸附；按空格让它们晃动。 |
+| 10 | [Soap Bubbles · 肥皂泡](https://jul11us.github.io/tactile-atelier/soap-bubbles.html) | 按住吹泡泡，松开让它漂浮，点击戳破。 |
+| 11 | [Marble Run · 弹珠轨道](https://jul11us.github.io/tactile-atelier/marble-run.html) | 拖动轨道；右键或 R 旋转；滚轮调整高度。 |
+| 12 | [Clay Stamp · 黏土印章](https://jul11us.github.io/tactile-atelier/clay-stamp.html) | 点击盖章，拖动绘制，Shift 拖动涂抹。 |
+| 13 | [Mochi Pets · 麻薯小宠](https://jul11us.github.io/tactile-atelier/mochi-pets.html) | 戳一下晃动，按住挤压，拖动拉长。 |
+| 14 | [Glass Chimes · 玻璃风铃](https://jul11us.github.io/tactile-atelier/wind-chimes.html) | 先点击启用声音，再划过玻璃管。 |
+| 15 | [Sand Garden · 枯山水沙盘](https://jul11us.github.io/tactile-atelier/sand-garden.html) | 拖动耙沙，双击放石子。 |
+| 16 | [Gel Pens · 凝胶画笔](https://jul11us.github.io/tactile-atelier/gel-pens.html) | 拖动画画，调节 Flow 让墨水流动。 |
+| 17 | [Popcorn · 爆米花](https://jul11us.github.io/tactile-atelier/popcorn.html) | 按住加热，松开冷却，再次加热重新爆开。 |
+| 18 | [Data Garden · 数据花园](https://jul11us.github.io/tactile-atelier/data-garden.html) | 输入数字长出花朵，悬停查看数值。 |
+| 19 | [Molecule Kit · 分子积木](https://jul11us.github.io/tactile-atelier/molecule-kit.html) | 放置原子，拖到一起连接成键。 |
+| 20 | [pH Lab · 酸碱实验室](https://jul11us.github.io/tactile-atelier/ph-lab.html) | 点击滴入溶液，A / B 切换酸与碱。 |
+| 21 | [Crystal Grow · 晶体生长](https://jul11us.github.io/tactile-atelier/crystal-grow.html) | 点击溶液播种，调整冷却速度与物质种类。 |
+| 22 | [Caramel Pudding · 焦糖布丁](https://jul11us.github.io/tactile-atelier/caramel-pudding.html) | 戳一下晃动，拖动滑行，空格摇晃桌面。 |
+| 25 | [Bubble Wrap · 气泡膜](https://jul11us.github.io/tactile-atelier/bubble-wrap.html) | 按下戳破，拖动戳破一整排。 |
+| 26 | [Kinetic Sand · 动力沙](https://jul11us.github.io/tactile-atelier/kinetic-sand.html) | 拖动切开，长按挤压。 |
+| 27 | [Squishy Slime · 软泥](https://jul11us.github.io/tactile-atelier/slime.html) | 抓住拉长，点击戳一下。 |
 
 保留作品原有编号。带声音的玩具可能需要先点击页面才能播放音频。
 
@@ -92,7 +92,7 @@ python -m http.server 8000 --bind 127.0.0.1
 
 **两种安装方式：**
 
-1. **安装包：** [下载 tactile-toy.skill](https://github.com/Jul11us/small-games/raw/refs/heads/main/tactile-toy.skill)，在支持 `.skill` 格式的助手中导入。
+1. **安装包：** [下载 tactile-toy.skill](https://github.com/Jul11us/tactile-atelier/raw/refs/heads/main/tactile-toy.skill)，在支持 `.skill` 格式的助手中导入。
 2. **文件夹：** 将 [`tactile-toy/`](tactile-toy/) 复制到助手配置的 Skills 目录，例如 `~/.codex/skills/tactile-toy/` 或 `~/.claude/skills/tactile-toy/`。
 
 然后，直接描述想做的东西：
@@ -123,5 +123,5 @@ tactile-toy/
 
 <div align="center">
 <sub>HTML、Three.js，还有一点把玩的兴致。</sub><br>
-<a href="https://jul11us.github.io/small-games/">留一点时间，玩一会儿 ↗</a>
+<a href="https://jul11us.github.io/tactile-atelier/">留一点时间，玩一会儿 ↗</a>
 </div>

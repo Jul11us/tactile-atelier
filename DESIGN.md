@@ -1,4 +1,4 @@
-# Small Games — Gallery design
+# Tactile Atelier — Gallery design
 
 ## Direction
 
@@ -20,6 +20,7 @@ An editorial object catalogue for seventeen tactile browser toys. The presentati
 - Georgia / Times New Roman provides the expressive serif wordmark, oversized hero, and object titles.
 - Arial / Helvetica Neue / Microsoft YaHei supports navigation, small labels, descriptions, and Chinese text.
 - Large titles use tight tracking; uppercase catalogue labels use restrained letter spacing.
+- The two-line Tactile / Atelier. title uses a narrower responsive scale and a restrained indent to fit the longer name, including the tablet two-column layout.
 - English leads the catalogue. Short Chinese labels help identify each toy.
 
 ## Layout

@@ -30,12 +30,12 @@ def tracked(text, xy, spacing=4, size=17, fill=MUTED):
         x += draw.textlength(char, font=f) + spacing
 
 
-tracked('SMALL GAMES / TACTILE GOODS', (80, 58), size=17)
+tracked('TACTILE ATELIER / TACTILE GOODS', (80, 58), size=17)
 tracked('A COLLECTION TO PLAY WITH', (1185, 58), size=15, spacing=3)
 draw.line((80, 108, 1720, 108), fill=INK, width=2)
 tracked('MATERIAL. MOTION. A MOMENT.', (85, 210), size=14, spacing=2)
-draw.text((70, 260), 'Small', font=font(176), fill=INK)
-draw.text((135, 435), 'Games.', font=font(176, italic=True), fill=ACCENT)
+draw.text((70, 275), 'Tactile /', font=font(147), fill=INK)
+draw.text((125, 435), 'Atelier.', font=font(153, italic=True), fill=ACCENT)
 draw.text((86, 674), 'Soft things, small gestures,', font=font(29), fill=INK)
 draw.text((86, 720), 'a little room to play.', font=font(29), fill=INK)
 draw.line((86, 822, 700, 822), fill=LINE, width=2)
@@ -66,6 +66,6 @@ detail.paste(shot, ((1200 - shot.width) // 2, (1000 - shot.height) // 2))
 detail.save(OUT / 'pudding-detail.jpg', quality=91, optimize=True)
 icon = Image.new('RGB', (128, 128), PAPER)
 idraw = ImageDraw.Draw(icon)
-idraw.text((27, 8), 'g', font=font(94, italic=True), fill=ACCENT)
+idraw.text((27, 8), 'a', font=font(94, italic=True), fill=ACCENT)
 icon.save(ROOT / 'favicon.ico', sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128)])
 print(OUT / 'cover.png')
